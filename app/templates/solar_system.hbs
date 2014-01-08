@@ -3,11 +3,11 @@
   <ul>
     {{#each transformConnectors}}
       <li>
-        {{type}}
+        {{name}}
         {{#if active}}
-            <button {{action 'deactivateConnector' type}}>Deactivate</button>
+            <button {{action 'deactivateConnector' this}}>Deactivate</button>
         {{else}}
-            <button {{action 'activateConnector' type}}>Activate</button>
+            <button {{action 'activateConnector' this}}>Activate</button>
         {{/if}}
       </li>
     {{/each}}

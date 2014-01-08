@@ -1,3 +1,5 @@
+import SolarSystemConnector from 'appkit/models/solar_system_connector';
+
 export default Ember.Object.extend({
   planets: null,
   transformConnectors: null,
@@ -48,40 +50,9 @@ export default Ember.Object.extend({
   },
 
   connectTo: function(connectedSolarSystem) {
-    var fromConnector = new Orbit.TransformConnector(this.get('orbitStore'), connectedSolarSystem.get('orbitStore')),
-        toConnector = new Orbit.TransformConnector(connectedSolarSystem.get('orbitStore'), this.get('orbitStore'));
-
-    Ember.set(fromConnector, 'type', 'from');
-    Ember.set(toConnector, 'type', 'to');
-
-    Ember.set(fromConnector, 'active', true);
-    Ember.set(toConnector, 'active', true);
-
     this.set('transformConnectors', [
-      fromConnector,
-      toConnector
+      SolarSystemConnector.create({name: 'from', source: this.get('orbitStore'), target: connectedSolarSystem.get('orbitStore')}),
+      SolarSystemConnector.create({name: 'to', source: connectedSolarSystem.get('orbitStore'), target: this.get('orbitStore')})
     ]);
-  },
-
-  activateConnector: function(type) {
-    var connector = this.getTransformConnector(type);
-    connector.activate();
-    Ember.set(connector, 'active', true);
-  },
-
-  deactivateConnector: function(type) {
-    var connector = this.getTransformConnector(type);
-    connector.deactivate();
-    Ember.set(connector, 'active', false);
-  },
-
-  getTransformConnector: function(type) {
-    var connector;
-    this.get('transformConnectors').forEach(function(c) {
-      if (c.type === type) {
-        connector = c;
-      }
-    });
-    return connector;
   }
 });

@@ -14,12 +14,12 @@ export default Em.ObjectController.extend({
       this.get('model').removePlanet(id);
     },
 
-    activateConnector: function(type) {
-      this.get('model').activateConnector(type);
+    activateConnector: function(connector) {
+      connector.activate();
     },
 
-    deactivateConnector: function(type) {
-      this.get('model').deactivateConnector(type);
+    deactivateConnector: function(connector) {
+      connector.deactivate();
     }
   }
 });

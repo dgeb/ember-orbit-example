@@ -24,8 +24,11 @@ export default Ember.Object.extend({
       namespace: this.get('name')
     });
 
+    // `id` is used for debugging / logging purposes
+    orbitStore.id = this.get('name');
+
     orbitStore.on('didTransform', function(operation, inverse) {
-      console.log('didTransform', operation, inverse);
+      console.log(orbitStore.id, 'didTransform', operation, inverse);
       _this.reload();
     });
 

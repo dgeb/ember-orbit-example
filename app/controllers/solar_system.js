@@ -1,13 +1,12 @@
 import SolarSystem from 'appkit/models/solar_system';
 
 export default Em.ObjectController.extend({
-  init: function() {
-    this._super();
-  },
+  planetName: null,
 
   actions: {
     addPlanet: function(name) {
       this.get('model').addPlanet(name);
+      this.set('planetName', null);
     },
 
     removePlanet: function(id) {

@@ -19,8 +19,10 @@
   <li>{{name}} <button {{action 'removePlanet' id}}>X</button></li>
 {{/each}}
 </ul>
-{{input type="text" value=planetName placeholder="Enter a planet name"}}
-<button {{action 'addPlanet' planetName}}>Add</button>
+<form {{action 'addPlanet' planetName on="submit"}}>
+  {{input type="text" value=planetName placeholder="Enter a planet name"}}
+  <button type="submit">Add</button>
+</form>
 
 <ul>
 {{#each transformations}}

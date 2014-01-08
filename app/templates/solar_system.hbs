@@ -1,7 +1,23 @@
+{{#if transformConnectors}}
+  <h3>Connectors</h3>
+  <ul>
+    {{#each transformConnectors}}
+      <li>
+        {{type}}
+        {{#if active}}
+            <button {{action 'deactivateConnector' type}}>Deactivate</button>
+        {{else}}
+            <button {{action 'activateConnector' type}}>Activate</button>
+        {{/if}}
+      </li>
+    {{/each}}
+  </ul>
+{{/if}}
+<h3>Planets</h3>
 <ul>
 {{#each planets}}
-  <li>{{name}} <button {{action 'remove' id}}>X</button></li>
+  <li>{{name}} <button {{action 'removePlanet' id}}>X</button></li>
 {{/each}}
 </ul>
 {{input type="text" value=planetName placeholder="Enter a planet name"}}
-<button {{action 'add' planetName}}>Add</button>
+<button {{action 'addPlanet' planetName}}>Add</button>

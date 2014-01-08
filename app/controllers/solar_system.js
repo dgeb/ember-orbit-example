@@ -6,12 +6,20 @@ export default Em.ObjectController.extend({
   },
 
   actions: {
-    add: function(name) {
+    addPlanet: function(name) {
       this.get('model').addPlanet(name);
     },
 
-    remove: function(id) {
+    removePlanet: function(id) {
       this.get('model').removePlanet(id);
+    },
+
+    activateConnector: function(type) {
+      this.get('model').activateConnector(type);
+    },
+
+    deactivateConnector: function(type) {
+      this.get('model').deactivateConnector(type);
     }
   }
 });

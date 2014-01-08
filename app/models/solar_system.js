@@ -1,8 +1,11 @@
 import SolarSystemConnector from 'appkit/models/solar_system_connector';
+import Transformation from 'appkit/models/transformation';
 
 export default Ember.Object.extend({
   planets: null,
   transformConnectors: null,
+  transformations: null,
+  undoing: false,
 
   init: function() {
     this._super.apply(this, arguments);
@@ -27,12 +30,23 @@ export default Ember.Object.extend({
     // `id` is used for debugging / logging purposes
     orbitStore.id = this.get('name');
 
+    this.set('orbitStore', orbitStore);
+
+    this.set('transformations', []);
+
+    // Reload content on every transform
     orbitStore.on('didTransform', function(operation, inverse) {
       console.log(orbitStore.id, 'didTransform', operation, inverse);
+
+      if (!_this.get('undoing')) {
+        _this.get('transformations').pushObject(Transformation.create({
+          operation: operation,
+          inverse: inverse
+        }));
+      }
+
       _this.reload();
     });
-
-    this.set('orbitStore', orbitStore);
 
     _this.reload();
   },
@@ -49,6 +63,16 @@ export default Ember.Object.extend({
     var _this = this;
     this.get('orbitStore').find('planet').then(function(planets) {
       _this.set('planets', planets);
+    });
+  },
+
+  undo: function() {
+    var transformation = this.get('transformations').popObject(),
+        _this = this;
+
+    this.set('undoing', true);
+    this.get('orbitStore').transform(transformation.inverse).then(function() {
+      _this.set('undoing', false);
     });
   },
 

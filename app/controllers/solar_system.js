@@ -14,6 +14,10 @@ export default Em.ObjectController.extend({
       this.get('model').removePlanet(id);
     },
 
+    undo: function() {
+      this.get('model').undo();
+    },
+
     activateConnector: function(connector) {
       connector.activate();
     },

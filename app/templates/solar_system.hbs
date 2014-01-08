@@ -21,3 +21,15 @@
 </ul>
 {{input type="text" value=planetName placeholder="Enter a planet name"}}
 <button {{action 'addPlanet' planetName}}>Add</button>
+
+<ul>
+{{#each transformations}}
+  <li>
+    operation: {{operationJSON}}<br />
+    inverse: {{inverseJSON}}
+  </li>
+{{/each}}
+{{#if transformations}}
+  <button {{action 'undo'}}>Undo</button>
+{{/if}}
+</ul>

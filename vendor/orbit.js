@@ -277,6 +277,8 @@ define("orbit/connectors/transform_connector",
                 return this._resolveConflicts(operation.path, currentValue, operation.value);
               }
             }
+          } else if (operation.op === 'remove') {
+            return;
           }
         }
 

@@ -1,0 +1,7 @@
+<ul>
+{{#each planets}}
+  <li>{{name}} <button {{action 'remove' id}}>X</button></li>
+{{/each}}
+</ul>
+{{input type="text" value=planetName placeholder="Enter a planet name"}}
+<button {{action 'add' planetName}}>Add</button>

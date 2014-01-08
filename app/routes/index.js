@@ -1,5 +1,10 @@
+import SolarSystem from 'appkit/models/solar_system';
+
 export default Ember.Route.extend({
   model: function() {
-    return ['red', 'yellow', 'blue'];
+    var primary = SolarSystem.create({name: 'Primary'});
+    var secondary = SolarSystem.create({name: 'Secondary'});
+
+    return [ primary, secondary ];
   }
 });

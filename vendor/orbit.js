@@ -39,14 +39,12 @@ define("orbit/cache",
         this._doc = new Document(null, {arrayBasedPaths: true});
 
         // Expose methods from the Document interface
-        Orbit.expose(this, this._doc, 'reset');
+        Orbit.expose(this, this._doc, 'reset', 'transform');
 
         this.schema = schema;
-        this._doc.add(['deleted'], {});
         for (var model in schema.models) {
           if (schema.models.hasOwnProperty(model)) {
             this._doc.add([model], {});
-            this._doc.add(['deleted', model], {});
           }
         }
       },
@@ -89,10 +87,6 @@ define("orbit/cache",
         return Orbit.generateId();
       },
 
-      isDeleted: function(path) {
-        return this.retrieve(['deleted'].concat(path));
-      },
-
       length: function(path) {
         return Object.keys(this.retrieve(path)).length;
       },
@@ -103,19 +97,6 @@ define("orbit/cache",
         } catch(e) {
           return null;
         }
-      },
-
-      transform: function(operation, invert) {
-        var inverse = this._doc.transform(operation, invert);
-
-        // Track deleted records
-        if (operation.op === 'remove' && operation.path.length === 2) {
-          this._doc.transform({op: 'add',
-                               path: ['deleted'].concat(operation.path),
-                               value: true});
-        }
-
-        return inverse;
       }
     };
 
@@ -262,8 +243,6 @@ define("orbit/connectors/transform_connector",
 
       _transformTarget: function(operation) {
     //TODO-log    console.log('****', ' transform from ', this.source.id, ' to ', this.target.id, operation);
-
-        if (this.target.isDeleted && this.target.isDeleted(operation.path)) return;
 
         if (this.target.retrieve) {
           var currentValue = this.target.retrieve(operation.path);
@@ -1717,7 +1696,7 @@ define("orbit/sources/memory_source",
             resolve(_this._filter.call(_this, type, id));
           } else {
             var record = _this.retrieve([type, id]);
-            if (record && !record.deleted) {
+            if (record) {
               resolve(record);
             } else {
               reject(new Orbit.NotFoundException(type, id));
@@ -1756,9 +1735,7 @@ define("orbit/sources/memory_source",
                 }
               }
             }
-            if (match && !record.deleted) {
-              all.push(record);
-            }
+            if (match) all.push(record);
           }
         }
         return all;
@@ -1789,7 +1766,7 @@ define("orbit/sources/source",
 
         // Create an internal cache and expose some elements of its interface
         this._cache = new Cache(schema);
-        Orbit.expose(this, this._cache, 'isDeleted', 'length', 'reset', 'retrieve');
+        Orbit.expose(this, this._cache, 'length', 'reset', 'retrieve');
 
         Transformable.extend(this);
         Requestable.extend(this, ['find', 'add', 'update', 'patch', 'remove', 'link', 'unlink']);

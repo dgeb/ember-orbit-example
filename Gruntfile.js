@@ -67,7 +67,8 @@ module.exports = function(grunt) {
 
   config.env = process.env;
 
-  
+  // TODO - move to more appropriate place
+  config.env.PORT = config.env.PORT || 9000;
 
 
   // App Kit's Main Tasks

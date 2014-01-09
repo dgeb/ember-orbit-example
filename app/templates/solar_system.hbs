@@ -39,8 +39,8 @@
       <ul>
       {{#each transformations}}
         <li>
-          <div class="operation">{{operationJSON}}</div>
-          <div class="inverse">{{inverseJSON}}</div>
+          <div class="operation">{{stringify-json operation}}</div>
+          <div class="inverse">{{stringify-json inverse}}</div>
         </li>
       {{/each}}
       </ul>

@@ -11,13 +11,21 @@ export default Ember.Object.extend({
     this.set('orbitConnector', new Orbit.TransformConnector(this.get('source'), this.get('target')));
   },
 
-  activate: function() {
-    this.get('orbitConnector').activate();
-    this.set('active', true);
-  },
+  symbol: function() {
+    if (this.get('name') === 'from') {
+      return '<<';
+    } else {
+      return '>>';
+    }
+  }.property('name'),
 
-  deactivate: function() {
-    this.get('orbitConnector').deactivate();
-    this.set('active', false);
+  toggle: function() {
+    if (this.get('active')) {
+      this.get('orbitConnector').deactivate();
+      this.set('active', false);
+    } else {
+      this.get('orbitConnector').activate();
+      this.set('active', true);
+    }
   }
 });

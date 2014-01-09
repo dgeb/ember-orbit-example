@@ -1,37 +1,49 @@
 {{#if transformConnectors}}
-  <h3>Connectors</h3>
-  <ul>
+  <ul class="connectors">
     {{#each transformConnectors}}
-      <li>
-        {{name}}
-        {{#if active}}
-            <button {{action 'deactivateConnector' this}}>Deactivate</button>
-        {{else}}
-            <button {{action 'activateConnector' this}}>Activate</button>
-        {{/if}}
+      <li class="{{unbound name}}">
+        <div {{bind-attr class="name active :connector"}}
+             {{action 'toggleConnector' this}}>
+          {{symbol}}
+        </div>
       </li>
     {{/each}}
   </ul>
 {{/if}}
-<h3>Planets</h3>
-<ul>
-{{#each planets}}
-  <li>{{name}} <button {{action 'removePlanet' id}}>X</button></li>
-{{/each}}
-</ul>
-<form {{action 'addPlanet' planetName on="submit"}}>
-  {{input type="text" value=planetName placeholder="Enter a planet name"}}
-  <button type="submit">Add</button>
-</form>
 
-<ul>
-{{#each transformations}}
-  <li>
-    operation: {{operationJSON}}<br />
-    inverse: {{inverseJSON}}
-  </li>
-{{/each}}
-{{#if transformations}}
-  <button {{action 'undo'}}>Undo</button>
-{{/if}}
-</ul>
+<div class="solar-system">
+  <div class="header">
+    <h2>
+      {{name}}
+      <div class="controls">
+        {{#if transformations}}
+            <button {{action 'undo'}}>Undo</button>
+        {{/if}}
+      </div>
+    </h2>
+  </div>
+
+  <form {{action 'addPlanet' planetName on="submit"}}>
+    {{input type="text" value=planetName placeholder="Enter a planet name"}}
+    <button type="submit">Add</button>
+  </form>
+
+  <ul class="planets">
+  {{#each planets}}
+    <li>{{name}} <button {{action 'removePlanet' id}}>X</button></li>
+  {{/each}}
+  </ul>
+
+  {{#if transformations}}
+    <div class="transformations">
+      <ul>
+      {{#each transformations}}
+        <li>
+          <div class="operation">{{operationJSON}}</div>
+          <div class="inverse">{{inverseJSON}}</div>
+        </li>
+      {{/each}}
+      </ul>
+    </div>
+  {{/if}}
+</div>

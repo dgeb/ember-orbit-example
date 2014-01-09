@@ -17,12 +17,8 @@ export default Em.ObjectController.extend({
       this.get('model').undo();
     },
 
-    activateConnector: function(connector) {
-      connector.activate();
-    },
-
-    deactivateConnector: function(connector) {
-      connector.deactivate();
+    toggleConnector: function(connector) {
+      connector.toggle();
     }
   }
 });

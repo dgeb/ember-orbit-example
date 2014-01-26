@@ -1,32 +1,154 @@
-define("orbit",
-  ["orbit/core","orbit/lib/eq","orbit/lib/clone","orbit/lib/diffs","orbit/cache","orbit/document","orbit/evented","orbit/notifier","orbit/requestable","orbit/transaction","orbit/transform_queue","orbit/transformable","orbit/sources/source","orbit/sources/local_storage_source","orbit/sources/memory_source","orbit/sources/jsonapi_source","orbit/connectors/request_connector","orbit/connectors/transform_connector"],
-  function(Orbit, eq, clone, diffs, Cache, Document, Evented, Notifier, Requestable, Transaction, TransformQueue, Transformable, Source, LocalStorageSource, MemorySource, JSONAPISource, RequestConnector, TransformConnector) {
+define("orbit", 
+  ["./orbit/main","./orbit/action_queue","./orbit/cache","./orbit/document","./orbit/evented","./orbit/notifier","./orbit/requestable","./orbit/transaction","./orbit/transformable","./orbit/connectors/request_connector","./orbit/connectors/transform_connector","./orbit/lib/assert","./orbit/lib/config","./orbit/lib/diffs","./orbit/lib/eq","./orbit/lib/exceptions","./orbit/lib/objects","./orbit/lib/strings","./orbit/lib/stubs","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __dependency6__, __dependency7__, __dependency8__, __dependency9__, __dependency10__, __dependency11__, __dependency12__, __dependency13__, __dependency14__, __dependency15__, __dependency16__, __dependency17__, __dependency18__, __dependency19__, __exports__) {
     "use strict";
+    var Orbit = __dependency1__["default"];
+    var ActionQueue = __dependency2__["default"];
+    var Cache = __dependency3__["default"];
+    var Document = __dependency4__["default"];
+    var Evented = __dependency5__["default"];
+    var Notifier = __dependency6__["default"];
+    var Requestable = __dependency7__["default"];
+    var Transaction = __dependency8__["default"];
+    var Transformable = __dependency9__["default"];
+    var RequestConnector = __dependency10__["default"];
+    var TransformConnector = __dependency11__["default"];
+    var assert = __dependency12__.assert;
+    var arrayToOptions = __dependency13__.arrayToOptions;
+    var diffs = __dependency14__.diffs;
+    var eq = __dependency15__.eq;
+    var PathNotFoundException = __dependency16__.PathNotFoundException;
+    var clone = __dependency17__.clone;
+    var expose = __dependency17__.expose;
+    var extend = __dependency17__.extend;
+    var capitalize = __dependency18__.capitalize;
+    var noop = __dependency19__.noop;
+    var required = __dependency19__.required;
 
-    Orbit.eq = eq;
-    Orbit.clone = clone;
-    Orbit.diffs = diffs;
+    Orbit.ActionQueue = ActionQueue;
     Orbit.Cache = Cache;
     Orbit.Document = Document;
     Orbit.Evented = Evented;
     Orbit.Notifier = Notifier;
     Orbit.Requestable = Requestable;
     Orbit.Transaction = Transaction;
-    Orbit.TransformQueue = TransformQueue;
     Orbit.Transformable = Transformable;
-    Orbit.Source = Source;
-    Orbit.LocalStorageSource = LocalStorageSource;
-    Orbit.MemorySource = MemorySource;
-    Orbit.JSONAPISource = JSONAPISource;
     Orbit.RequestConnector = RequestConnector;
     Orbit.TransformConnector = TransformConnector;
+    // lib fns
+    Orbit.assert = assert;
+    Orbit.arrayToOptions = arrayToOptions;
+    Orbit.diffs = diffs;
+    Orbit.eq = eq;
+    Orbit.PathNotFoundException = PathNotFoundException;
+    Orbit.clone = clone;
+    Orbit.expose = expose;
+    Orbit.extend = extend;
+    Orbit.capitalize = capitalize;
+    Orbit.noop = noop;
+    Orbit.required = required;
 
-    return Orbit;
+    __exports__["default"] = Orbit;
   });
-define("orbit/cache",
-  ["orbit/core","orbit/document"],
-  function(Orbit, Document) {
+define("orbit/action_queue", 
+  ["orbit/main","orbit/evented","orbit/lib/assert","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
     "use strict";
+    var Orbit = __dependency1__["default"];
+    var Evented = __dependency2__["default"];
+    var assert = __dependency3__.assert;
+
+    var ActionQueue = function() {
+      this.init.apply(this, arguments);
+    };
+
+    ActionQueue.prototype = {
+      constructor: ActionQueue,
+
+      init: function(fn, context, options) {
+        assert('ActionQueue requires Orbit.Promise to be defined', Orbit.Promise);
+
+        Evented.extend(this);
+
+        this.fn = fn;
+        this.context = context || this;
+
+        options = options || {};
+        this.autoProcess = options.autoProcess !== undefined ? options.autoProcess : true;
+
+        this._queue = [];
+        this.processing = false;
+      },
+
+      push: function() {
+        var _this = this,
+            args = arguments;
+
+        var response = new Orbit.Promise(function(resolve) {
+          var action = function() {
+            var ret = _this.fn.apply(_this.context, args);
+            if (ret) {
+              return ret.then(
+                function() {
+                  resolve();
+                }
+              );
+            } else {
+              resolve();
+            }
+          };
+
+          _this._queue.push(action);
+        });
+
+        if (this.autoProcess) this.process();
+
+        return response;
+      },
+
+      process: function() {
+        if (!this.processing) {
+          var _this = this;
+
+          _this.processing = true;
+
+          var settleEach = function() {
+            if (_this._queue.length === 0) {
+              _this.processing = false;
+              _this.emit('didComplete');
+
+            } else {
+              var action = _this._queue.shift();
+              var ret = action.call(_this);
+
+              if (ret) {
+                return ret.then(
+                  function(success) {
+                    settleEach();
+                  },
+                  function(error) {
+                    settleEach();
+                  }
+                );
+              } else {
+                settleEach();
+              }
+            }
+          };
+
+          settleEach();
+        }
+      }
+    };
+
+    __exports__["default"] = ActionQueue;
+  });
+define("orbit/cache", 
+  ["orbit/document","orbit/lib/objects","exports"],
+  function(__dependency1__, __dependency2__, __exports__) {
+    "use strict";
+    var Document = __dependency1__["default"];
+    var expose = __dependency2__.expose;
 
     var Cache = function() {
       this.init.apply(this, arguments);
@@ -39,7 +161,7 @@ define("orbit/cache",
         this._doc = new Document(null, {arrayBasedPaths: true});
 
         // Expose methods from the Document interface
-        Orbit.expose(this, this._doc, 'reset', 'transform');
+        expose(this, this._doc, 'reset', 'transform');
 
         this.schema = schema;
         for (var model in schema.models) {
@@ -49,6 +171,7 @@ define("orbit/cache",
         }
       },
 
+      // TODO - move to schema
       initRecord: function(type, data) {
         if (data[this.schema.idField] !== undefined) return;
 
@@ -83,8 +206,14 @@ define("orbit/cache",
         }
       },
 
+      // TODO - move to schema
       generateId: function() {
-        return Orbit.generateId();
+        if (this._newId) {
+          this._newId++;
+        } else {
+          this._newId = 1;
+        }
+        return new Date().getTime() + '.' + this._newId;
       },
 
       length: function(path) {
@@ -100,12 +229,16 @@ define("orbit/cache",
       }
     };
 
-    return Cache;
+    __exports__["default"] = Cache;
   });
-define("orbit/connectors/request_connector",
-  ["orbit/core","orbit/requestable"],
-  function(Orbit, Requestable) {
+define("orbit/connectors/request_connector", 
+  ["orbit/requestable","orbit/lib/assert","orbit/lib/config","orbit/lib/strings","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
     "use strict";
+    var Requestable = __dependency1__["default"];
+    var assert = __dependency2__.assert;
+    var arrayToOptions = __dependency3__.arrayToOptions;
+    var capitalize = __dependency4__.capitalize;
 
     var RequestConnector = function(primarySource, secondarySource, options) {
       var _this = this;
@@ -116,10 +249,10 @@ define("orbit/connectors/request_connector",
       options = options || {};
 
       this.actions = options.actions || Requestable.defaultActions;
-      if (options.types) this.types = Orbit.arrayToOptions(options.types);
+      if (options.types) this.types = arrayToOptions(options.types);
 
       this.mode = options.mode !== undefined ? options.mode : 'rescue';
-      Orbit.assert("`mode` must be 'assist' or 'rescue'", this.mode === 'assist' ||
+      assert("`mode` must be 'assist' or 'rescue'", this.mode === 'assist' ||
                                                           this.mode === 'rescue');
 
       var active = options.active !== undefined ? options.active : true;
@@ -148,7 +281,7 @@ define("orbit/connectors/request_connector",
             handler = _this.secondarySource[action];
           }
 
-          _this.primarySource.on(_this.mode + Orbit.capitalize(action),
+          _this.primarySource.on(_this.mode + capitalize(action),
             handler,
             _this.secondarySource
           );
@@ -163,7 +296,7 @@ define("orbit/connectors/request_connector",
         var _this = this;
 
         this.actions.forEach(function(action) {
-          this.primarySource.off(_this.mode + Orbit.capitalize(action),
+          this.primarySource.off(_this.mode + capitalize(action),
             _this.handlers[action],
             _this.secondarySource
           );
@@ -177,23 +310,27 @@ define("orbit/connectors/request_connector",
       }
     };
 
-    return RequestConnector;
+    __exports__["default"] = RequestConnector;
   });
-define("orbit/connectors/transform_connector",
-  ["orbit/core","orbit/lib/clone","orbit/lib/diffs","orbit/lib/eq"],
-  function(Orbit, clone, diffs, eq) {
+define("orbit/connectors/transform_connector", 
+  ["orbit/action_queue","orbit/lib/objects","orbit/lib/diffs","orbit/lib/eq","orbit/lib/config","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __exports__) {
     "use strict";
+    var ActionQueue = __dependency1__["default"];
+    var clone = __dependency2__.clone;
+    var diffs = __dependency3__.diffs;
+    var eq = __dependency4__.eq;
+    var arrayToOptions = __dependency5__.arrayToOptions;
 
     var TransformConnector = function(source, target, options) {
-      var _this = this;
-
       this.source = source;
       this.target = target;
+      this.transformQueue = new ActionQueue(this.transform, this, {autoProcess: false});
 
       options = options || {};
     // TODO - allow filtering of transforms
-    //  if (options.actions) this.actions = Orbit.arrayToOptions(options.actions);
-    //  if (options.types) this.types = Orbit.arrayToOptions(options.types);
+    //  if (options.actions) this.actions = arrayToOptions(options.actions);
+    //  if (options.types) this.types = arrayToOptions(options.types);
       this.blocking = options.blocking !== undefined ? options.blocking : true;
       var active = options.active !== undefined ? options.active : true;
 
@@ -209,18 +346,51 @@ define("orbit/connectors/transform_connector",
         if (this._active) return;
 
         this.source.on('didTransform',  this._processTransform,  this);
+        this.target.transformQueue.on('didComplete', this.transformQueue.process, this.transformQueue);
 
         this._active = true;
       },
 
       deactivate: function() {
         this.source.off('didTransform',  this._processTransform,  this);
+        this.target.transformQueue.off('didComplete', this.transformQueue.process, this.transformQueue);
 
         this._active = false;
       },
 
       isActive: function() {
         return this._active;
+      },
+
+      transform: function(operation) {
+        //TODO-log  console.log('****', ' transform from ', this.source.id, ' to ', this.target.id, operation);
+
+        if (this.target.retrieve) {
+          var currentValue = this.target.retrieve(operation.path);
+
+          if (currentValue) {
+            if (operation.op === 'add' || operation.op === 'replace') {
+              if (eq(currentValue, operation.value)) {
+                //TODO-log  console.log('==', ' transform from ', this.source.id, ' to ', this.target.id, operation);
+                return;
+              } else {
+                return this.resolveConflicts(operation.path, currentValue, operation.value);
+              }
+            }
+          } else if (operation.op === 'remove') {
+            return;
+          }
+        }
+
+        return this.target.transform(operation);
+      },
+
+      resolveConflicts: function(path, currentValue, updatedValue) {
+        var ops = diffs(currentValue, updatedValue, {basePath: path});
+
+        //TODO-log  console.log(this.target.id, 'resolveConflicts', path, currentValue, updatedValue, ops);
+
+        return this.target.transform(ops);
       },
 
       /////////////////////////////////////////////////////////////////////////////
@@ -234,157 +404,37 @@ define("orbit/connectors/transform_connector",
 
     //    console.log(this.target.id, 'processTransform', operation);
         if (this.blocking) {
-          return this._transformTarget(operation);
+          return this._applyOrQueueTransform(operation);
 
         } else {
-          this._transformTarget(operation);
+          this._applyOrQueueTransform(operation);
         }
       },
 
-      _transformTarget: function(operation) {
-    //TODO-log    console.log('****', ' transform from ', this.source.id, ' to ', this.target.id, operation);
-
-        if (this.target.retrieve) {
-          var currentValue = this.target.retrieve(operation.path);
-
-          if (currentValue) {
-            if (operation.op === 'add' || operation.op === 'replace') {
-              if (eq(currentValue, operation.value)) {
-    //TODO-log            console.log('==', ' transform from ', this.source.id, ' to ', this.target.id, operation);
-                return;
-              } else {
-                return this._resolveConflicts(operation.path, currentValue, operation.value);
-              }
-            }
-          } else if (operation.op === 'remove') {
-            return;
-          }
+      _applyOrQueueTransform: function(operation) {
+        // If the target's transformQueue is processing, then we should queue up the
+        // transform on the connector instead of on the target.
+        // This ensures that comparisons are made against the target's most up to
+        // date state. Note that this connector's queue processing is triggered
+        // by the `didComplete` event for the target's queue.
+        if (this.target.transformQueue.processing) {
+          return this.transformQueue.push(operation);
         }
 
-        return this.target.transform(operation);
-      },
-
-      _resolveConflicts: function(path, currentValue, updatedValue) {
-        var ops = diffs(currentValue, updatedValue, {basePath: path});
-
-    //TODO-log    console.log(this.target.id, 'resolveConflicts', path, currentValue, updatedValue, ops);
-
-        return this.target.transform(ops);
+        return this.transform(operation);
       }
     };
 
-    return TransformConnector;
+    __exports__["default"] = TransformConnector;
   });
-define("orbit/core",
-  ["orbit/lib/eq","orbit/lib/clone"],
-  function(eq, clone) {
+define("orbit/document", 
+  ["orbit/lib/objects","orbit/lib/diffs","orbit/lib/eq","orbit/lib/exceptions","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
     "use strict";
-
-    /**
-     * Prototype extensions
-     */
-    if (!Array.prototype.forEach) {
-      Array.prototype.forEach = function (fn, scope) {
-        var i, len;
-        for (i = 0, len = this.length; i < len; ++i) {
-          if (i in this) {
-            fn.call(scope, this[i], i, this);
-          }
-        }
-      };
-    }
-
-    /**
-     * Orbit
-     */
-    var Orbit = {
-      generateId: function() {
-        if (this._newId) {
-          this._newId++;
-        } else {
-          this._newId = 1;
-        }
-        return new Date().getTime() + '.' + this._newId;
-      },
-
-      assert: function(desc, test) {
-        if (!test) throw new Error("Assertion failed: " + desc);
-      },
-
-      capitalize: function(str) {
-        return str.charAt(0).toUpperCase() + str.slice(1);
-      },
-
-      expose: function(destination, source) {
-        var properties;
-        if (arguments.length > 2) {
-          properties = Array.prototype.slice.call(arguments, 2);
-        } else {
-          properties = source;
-        }
-
-        properties.forEach(function(p) {
-          if (typeof source[p] === 'function') {
-            destination[p] = function() {
-              return source[p].apply(source, arguments);
-            };
-          } else {
-            destination[p] = source[p];
-          }
-        });
-      },
-
-      extend: function(destination) {
-        var sources = Array.prototype.slice.call(arguments, 1);
-        sources.forEach(function(source) {
-          for (var p in source) {
-            destination[p] = source[p];
-          }
-        });
-      },
-
-      K: function() { return this; },
-
-      arrayToOptions: function(arr) {
-        var options = {};
-        if (arr) {
-          for (var i in arr) {
-            if (arr.hasOwnProperty(i)) options[arr[i]] = true;
-          }
-        }
-        return options;
-      },
-
-      promisifyException: function(e) {
-        return new Orbit.Promise(function(resolve, reject) {
-          reject(e);
-        });
-      }
-    };
-
-    Orbit.NotFoundException = function(type, record) {
-      this.type = type;
-      this.record = record;
-    };
-    Orbit.NotFoundException.prototype = {
-      constructor: 'NotFoundException'
-    };
-
-    Orbit.AlreadyExistsException = function(type, record) {
-      this.type = type;
-      this.record = record;
-    };
-    Orbit.AlreadyExistsException.prototype = {
-      constructor: 'AlreadyExistsException'
-    };
-
-
-    return Orbit;
-  });
-define("orbit/document",
-  ["orbit/lib/clone","orbit/lib/diffs","orbit/lib/eq"],
-  function(clone, diffs, eq) {
-    "use strict";
+    var clone = __dependency1__.clone;
+    var diffs = __dependency2__.diffs;
+    var eq = __dependency3__.eq;
+    var PathNotFoundException = __dependency4__.PathNotFoundException;
 
     var Document = function() {
       this.init.apply(this, arguments);
@@ -487,7 +537,7 @@ define("orbit/document",
       /////////////////////////////////////////////////////////////////////////////
 
       _pathNotFound: function(path) {
-        throw new Document.PathNotFoundException(this.serializePath(path));
+        throw new PathNotFoundException(this.serializePath(path));
       },
 
       _retrieve: function(path) {
@@ -710,20 +760,16 @@ define("orbit/document",
       }
     };
 
-    var PathNotFoundException = function(path) {
-      this.path = path;
-    };
-    PathNotFoundException.prototype = {
-      constructor: PathNotFoundException
-    };
-    Document.PathNotFoundException = PathNotFoundException;
-
-    return Document;
+    __exports__["default"] = Document;
   });
-define("orbit/evented",
-  ["orbit/core","orbit/notifier"],
-  function(Orbit, Notifier) {
+define("orbit/evented", 
+  ["orbit/main","orbit/notifier","orbit/lib/assert","orbit/lib/objects","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
     "use strict";
+    var Orbit = __dependency1__["default"];
+    var Notifier = __dependency2__["default"];
+    var assert = __dependency3__.assert;
+    var extend = __dependency4__.extend;
 
     var notifierForEvent = function(object, eventName, createIfUndefined) {
       var notifier = object._eventedNotifiers[eventName];
@@ -739,10 +785,10 @@ define("orbit/evented",
 
     var Evented = {
       extend: function(object) {
-        Orbit.assert('Evented requires Orbit.Promise be defined', Orbit.Promise);
+        assert('Evented requires Orbit.Promise be defined', Orbit.Promise);
 
         if (object._evented === undefined) {
-          Orbit.extend(object, this.interface);
+          extend(object, this.interface);
           object._eventedNotifiers = {};
         }
         return object;
@@ -881,57 +927,46 @@ define("orbit/evented",
       }
     };
 
-    return Evented;
+    __exports__["default"] = Evented;
   });
-define("orbit/lib/clone",
-  ["orbit/lib/eq"],
-  function(eq) {
+define("orbit/lib/assert", 
+  ["exports"],
+  function(__exports__) {
     "use strict";
-
-    var clone = function(obj) {
-      if (obj === undefined || obj === null || typeof obj !== 'object') return obj;
-
-      var dup,
-          type = Object.prototype.toString.call(obj);
-
-      if (type === "[object Date]") {
-        dup = new Date();
-        dup.setTime(obj.getTime());
-
-      } else if (type === "[object RegExp]") {
-        dup = obj.constructor(obj);
-
-      } else if (type === "[object Array]") {
-        dup = [];
-        for (var i = 0, len = obj.length; i < len; i++) {
-          if (obj.hasOwnProperty(i)) {
-            dup.push(clone(obj[i]));
-          }
-        }
-
-      } else  {
-        var val;
-
-        dup = {};
-        for (var key in obj) {
-          if (obj.hasOwnProperty(key)) {
-            val = obj[key];
-            if (typeof val === 'object') val = clone(val);
-            dup[key] = val;
-          }
-        }
-      }
-      return dup;
+    /**
+     * Throw an exception if `test` is not truthy.
+     *
+     * @mathod assert
+     * @param desc Description of the error thrown
+     * @param test
+     */
+    var assert = function(desc, test) {
+      if (!test) throw new Error("Assertion failed: " + desc);
     };
 
-    return clone;
+    __exports__.assert = assert;
   });
-define("orbit/lib/diffs",
-  ["orbit/lib/eq","orbit/lib/clone"],
-  function(eq, clone) {
+define("orbit/lib/config", 
+  ["exports"],
+  function(__exports__) {
     "use strict";
-
-    // TODO - extract
+    /**
+     * Converts an array of values to an object with those values as properties
+     * having a value of `true`.
+     *
+     * This is useful for converting an array of settings to a more efficiently
+     * accessible settings object.
+     *
+     * For example:
+     *
+     * ``` javascript
+     * Orbit.arrayToOptions(['a', 'b']); // returns {a: true, b: true}
+     * ```
+     *
+     * @method arrayToOptions
+     * @param arr
+     * @returns {Object}
+     */
     var arrayToOptions = function(arr) {
       var options = {};
       if (arr) {
@@ -941,6 +976,16 @@ define("orbit/lib/diffs",
       }
       return options;
     };
+
+    __exports__.arrayToOptions = arrayToOptions;
+  });
+define("orbit/lib/diffs", 
+  ["orbit/lib/eq","orbit/lib/objects","orbit/lib/config","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
+    "use strict";
+    var eq = __dependency1__.eq;
+    var clone = __dependency2__.clone;
+    var arrayToOptions = __dependency3__.arrayToOptions;
 
     var diffs = function(a, b, options) {
       if (a === b) {
@@ -1041,11 +1086,11 @@ define("orbit/lib/diffs",
       }
     };
 
-    return diffs;
+    __exports__.diffs = diffs;
   });
-define("orbit/lib/eq",
-  [],
-  function() {
+define("orbit/lib/eq", 
+  ["exports"],
+  function(__exports__) {
     "use strict";
     var eq = function(a, b) {
       // Some elements of this function come from underscore
@@ -1102,11 +1147,193 @@ define("orbit/lib/eq",
       return true;
     };
 
-    return eq;
+    __exports__.eq = eq;
   });
-define("orbit/notifier",
-  [],
-  function() {
+define("orbit/lib/exceptions", 
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    var PathNotFoundException = function(path) {
+      this.path = path;
+    };
+
+    PathNotFoundException.prototype = {
+      constructor: PathNotFoundException
+    };
+
+    __exports__.PathNotFoundException = PathNotFoundException;
+  });
+define("orbit/lib/objects", 
+  ["orbit/lib/eq","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var eq = __dependency1__.eq;
+
+    var clone = function(obj) {
+      if (obj === undefined || obj === null || typeof obj !== 'object') return obj;
+
+      var dup,
+          type = Object.prototype.toString.call(obj);
+
+      if (type === "[object Date]") {
+        dup = new Date();
+        dup.setTime(obj.getTime());
+
+      } else if (type === "[object RegExp]") {
+        dup = obj.constructor(obj);
+
+      } else if (type === "[object Array]") {
+        dup = [];
+        for (var i = 0, len = obj.length; i < len; i++) {
+          if (obj.hasOwnProperty(i)) {
+            dup.push(clone(obj[i]));
+          }
+        }
+
+      } else  {
+        var val;
+
+        dup = {};
+        for (var key in obj) {
+          if (obj.hasOwnProperty(key)) {
+            val = obj[key];
+            if (typeof val === 'object') val = clone(val);
+            dup[key] = val;
+          }
+        }
+      }
+      return dup;
+    };
+
+    /**
+     * Expose properties and methods from one object on another.
+     *
+     * Methods will be called on `source` and will maintain `source` as the
+     * context.
+     *
+     * @method expose
+     * @param destination
+     * @param source
+     */
+    var expose = function(destination, source) {
+      var properties;
+      if (arguments.length > 2) {
+        properties = Array.prototype.slice.call(arguments, 2);
+      } else {
+        properties = source;
+      }
+
+      properties.forEach(function(p) {
+        if (typeof source[p] === 'function') {
+          destination[p] = function() {
+            return source[p].apply(source, arguments);
+          };
+        } else {
+          destination[p] = source[p];
+        }
+      });
+    };
+
+    /**
+     * Extend an object with the properties of one or more other objects
+     *
+     * @method extend
+     * @param destination The object to merge into
+     * @param source One or more source objects
+     */
+    var extend = function(destination) {
+      var sources = Array.prototype.slice.call(arguments, 1);
+      sources.forEach(function(source) {
+        for (var p in source) {
+          if (source.hasOwnProperty(p)) {
+            destination[p] = source[p];
+          }
+        }
+      });
+    };
+
+    __exports__.clone = clone;
+    __exports__.expose = expose;
+    __exports__.extend = extend;
+  });
+define("orbit/lib/strings", 
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    /**
+     * Uppercase the first letter of a string. The remainder of the string won't
+     * be affected.
+     *
+     * @method capitalize
+     * @param {String} str
+     * @returns {String}
+     */
+    var capitalize = function(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    };
+
+    __exports__.capitalize = capitalize;
+  });
+define("orbit/lib/stubs", 
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    /**
+     * Empty method that does nothing.
+     *
+     * Use as a placeholder for non-required static methods.
+     *
+     * @method noop
+     */
+    var noop = function() {};
+
+    /**
+     * Empty method that should be overridden. Otherwise, it will throw an Error.
+     *
+     * Use as a placeholder for required static methods.
+     *
+     * @method required
+     */
+    var required = function() { throw new Error("Missing implementation"); };
+
+    __exports__.noop = noop;
+    __exports__.required = required;
+  });
+define("orbit/main", 
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    /**
+     * Orbit
+     *
+     * @module orbit
+     */
+
+    // Prototype extensions
+    if (!Array.prototype.forEach) {
+      Array.prototype.forEach = function (fn, scope) {
+        var i, len;
+        for (i = 0, len = this.length; i < len; ++i) {
+          if (i in this) {
+            fn.call(scope, this[i], i, this);
+          }
+        }
+      };
+    }
+
+    /**
+     * Namespace for core Orbit methods and classes.
+     *
+     * @class Orbit
+     * @static
+     */
+    var Orbit = {};
+
+    __exports__["default"] = Orbit;
+  });
+define("orbit/notifier", 
+  ["exports"],
+  function(__exports__) {
     "use strict";
     var Notifier = function() {
       this.init.apply(this, arguments);
@@ -1166,12 +1393,15 @@ define("orbit/notifier",
       }
     };
 
-    return Notifier;
+    __exports__["default"] = Notifier;
   });
-define("orbit/requestable",
-  ["orbit/core","orbit/evented"],
-  function(Orbit, Evented) {
+define("orbit/requestable", 
+  ["orbit/evented","orbit/lib/assert","orbit/lib/strings","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
     "use strict";
+    var Evented = __dependency1__["default"];
+    var assert = __dependency2__.assert;
+    var capitalize = __dependency3__.capitalize;
 
     var Requestable = {
       defaultActions: ['find'],
@@ -1180,26 +1410,22 @@ define("orbit/requestable",
         if (object._requestable === undefined) {
           object._requestable = true;
           Evented.extend(object);
-          this._defineAction(object, actions || this.defaultActions);
+          this.defineAction(object, actions || this.defaultActions);
         }
         return object;
       },
 
-      /////////////////////////////////////////////////////////////////////////////
-      // Internals
-      /////////////////////////////////////////////////////////////////////////////
-
-      _defineAction: function(object, action) {
+      defineAction: function(object, action) {
         if (Object.prototype.toString.call(action) === "[object Array]") {
           action.forEach(function(name) {
-            this._defineAction(object, name);
+            this.defineAction(object, name);
           }, this);
         } else {
           object[action] = function() {
-            Orbit.assert('_' + action + ' must be defined', object['_' + action]);
+            assert('_' + action + ' must be defined', object['_' + action]);
 
             var args = Array.prototype.slice.call(arguments, 0),
-                Action = Orbit.capitalize(action);
+                Action = capitalize(action);
 
             return object.resolve.apply(object, ['assist' + Action].concat(args)).then(
               null,
@@ -1237,704 +1463,12 @@ define("orbit/requestable",
       }
     };
 
-    return Requestable;
+    __exports__["default"] = Requestable;
   });
-define("orbit/sources/jsonapi_source",
-  ["orbit/core","orbit/sources/source","orbit/lib/clone"],
-  function(Orbit, Source, clone) {
+define("orbit/transaction", 
+  ["exports"],
+  function(__exports__) {
     "use strict";
-
-    var JSONAPISource = function() {
-      this.init.apply(this, arguments);
-    };
-
-    Orbit.extend(JSONAPISource.prototype, Source.prototype, {
-      constructor: JSONAPISource,
-
-      init: function(schema, options) {
-        Orbit.assert('JSONAPISource requires Orbit.Promise be defined', Orbit.Promise);
-        Orbit.assert('JSONAPISource requires Orbit.ajax be defined', Orbit.ajax);
-
-        Source.prototype.init.apply(this, arguments);
-
-        options = options || {};
-        this.schema = schema;
-        this.remoteIdField = options['remoteIdField'] || 'id';
-        this.namespace = options['namespace'];
-        this.headers = options['headers'];
-
-        this._remoteToLocalIdMap = {};
-        this._localToRemoteIdMap = {};
-      },
-
-      initRecord: function(type, record) {
-        var id = record[this.schema.idField],
-            remoteId = record[this.remoteIdField];
-
-        if (remoteId && !id) {
-          id = record[this.idField] = this._remoteToLocalId(remoteId);
-        }
-
-        if (!id) {
-          this._cache.initRecord(type, record);
-          id = record[this.schema.idField];
-        }
-
-        this._updateRemoteIdMap(type, id, remoteId);
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Transformable interface implementation
-      /////////////////////////////////////////////////////////////////////////////
-
-      _transform: function(operation) {
-        var _this = this,
-            path  = operation.path,
-            data  = operation.value,
-            type  = path[0],
-            id    = path[1],
-            remoteId,
-            record;
-
-        if (path.length > 2) {
-          remoteId = this._localToRemoteId(type, id);
-          if (!remoteId) throw new Orbit.NotFoundException(type, id);
-
-          var baseURL = this._buildURL(type, remoteId);
-
-          path = path.slice(2);
-
-          if (path[0] === 'links') {
-            var property = path[1];
-            var linkDef = this._cache.schema.models[type].links[property];
-
-            var linkedId;
-
-            if (operation.op === 'remove') {
-              if (path.length > 2) {
-                linkedId = path.pop();
-                path.push(this._localToRemoteId(linkDef.model, linkedId));
-              }
-
-            } else {
-              if (path.length > 2) {
-                linkedId = path.pop();
-                path.push('-');
-              } else {
-                linkedId = data;
-              }
-              data = this._localToRemoteId(linkDef.model, linkedId);
-            }
-          }
-
-          var remoteOp = {op: operation.op, path: baseURL + '/' + path.join('/')};
-          if (data) remoteOp.value = data;
-
-          return this._ajax(baseURL, 'PATCH', {data: remoteOp}).then(
-            function() {
-              _this._transformCache(operation);
-            }
-          );
-
-        } else {
-          if (operation.op === 'add') {
-            if (id) {
-              var recordInCache = _this.retrieve([type, id]);
-              if (recordInCache) throw new Orbit.AlreadyExistsException(type, id);
-            }
-
-            return this._ajax(this._buildURL(type), 'POST', {data: this._serialize(type, data)}).then(
-              function(raw) {
-                record = _this._deserialize(type, raw);
-                record[_this.schema.idField] = id;
-                _this._addToCache(type, record);
-              }
-            );
-
-          } else {
-            remoteId = this._localToRemoteId(type, id);
-            if (!remoteId) throw new Orbit.NotFoundException(type, id);
-
-            if (operation.op === 'replace') {
-              return this._ajax(this._buildURL(type, remoteId), 'PUT', {data: this._serialize(type, data)}).then(
-                function(raw) {
-                  record = _this._deserialize(type, raw);
-                  record[_this.schema.idField] = id;
-                  _this._addToCache(type, record);
-                }
-              );
-
-            } else if (operation.op === 'remove') {
-              return this._ajax(this._buildURL(type, remoteId), 'DELETE').then(function() {
-                _this._transformCache(operation);
-              });
-            }
-          }
-        }
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Requestable interface implementation
-      /////////////////////////////////////////////////////////////////////////////
-
-      _find: function(type, id) {
-        if (id && (typeof id === 'number' || typeof id === 'string')) {
-          var remoteId = this._localToRemoteId(type, id);
-          if (!remoteId) throw new Orbit.NotFoundException(type, id);
-          return this._findOne(type, remoteId);
-
-        } else if (id && (typeof id === 'object' && id[this.remoteIdField])) {
-          return this._findOne(type, id[this.remoteIdField]);
-
-        } else {
-          return this._findQuery(type, id);
-        }
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Internals
-      /////////////////////////////////////////////////////////////////////////////
-
-      _addToCache: function(type, record) {
-        this.initRecord(type, record);
-        this._transformCache({
-          op: 'add',
-          path: [type, record[this.schema.idField]],
-          value: record
-        });
-      },
-
-      _findOne: function(type, remoteId) {
-        var _this = this;
-        return this._ajax(this._buildURL(type, remoteId), 'GET').then(
-          function(raw) {
-            var record = _this._deserialize(type, raw);
-            _this._addToCache(type, record);
-            return record;
-          }
-        );
-      },
-
-      _findQuery: function(type, query) {
-        var _this = this;
-
-        return this._ajax(this._buildURL(type), 'GET', {data: query}).then(
-          function(raw) {
-            var eachRaw,
-                record,
-                records = [];
-
-            raw.forEach(function(eachRaw) {
-              record = _this._deserialize(type, eachRaw);
-              _this._addToCache(type, record);
-              records.push(record);
-            });
-
-            return records;
-          }
-        );
-      },
-
-      _localToRemoteId: function(type, id) {
-        var dataForType = this._localToRemoteIdMap[type];
-        if (dataForType) return dataForType[id];
-      },
-
-      _remoteToLocalId: function(type, remoteId) {
-        var dataForType = this._remoteToLocalIdMap[type];
-        if (dataForType) return dataForType[remoteId];
-      },
-
-      _transformCache: function(operation) {
-        var pathToVerify,
-            inverse;
-
-        if (operation.op === 'add') {
-          pathToVerify = operation.path.slice(0, operation.path.length - 1);
-        } else {
-          pathToVerify = operation.path;
-        }
-
-        if (!this.retrieve(pathToVerify)) {
-          // TODO console.log('JSONAPISource does not have cached', pathToVerify, 'for operation', operation);
-          inverse = [];
-
-        } else {
-          inverse = this._cache.transform(operation, true);
-        }
-
-        this.didTransform(operation, inverse);
-      },
-
-      _updateRemoteIdMap: function(type, id, remoteId) {
-        if (id && remoteId) {
-          var mapForType;
-
-          mapForType = this._remoteToLocalIdMap[type];
-          if (!mapForType) mapForType = this._remoteToLocalIdMap[type] = {};
-          mapForType[remoteId] = id;
-
-          mapForType = this._localToRemoteIdMap[type];
-          if (!mapForType) mapForType = this._localToRemoteIdMap[type] = {};
-          mapForType[id] = remoteId;
-        }
-      },
-
-      _ajax: function(url, method, hash) {
-        var _this = this;
-
-        return new Orbit.Promise(function(resolve, reject) {
-          hash = hash || {};
-          hash.url = url;
-          hash.type = method;
-          hash.dataType = 'json';
-          hash.context = _this;
-
-    //TODO-log      console.log('ajax start', method);
-
-          if (hash.data && method !== 'GET') {
-            hash.contentType = 'application/json; charset=utf-8';
-            hash.data = JSON.stringify(hash.data);
-          }
-
-          if (_this.headers !== undefined) {
-            var headers = _this.headers;
-            hash.beforeSend = function (xhr) {
-              for (var key in headers) {
-                if (headers.hasOwnProperty(key)) {
-                  xhr.setRequestHeader(key, headers[key]);
-                }
-              }
-            };
-          }
-
-          hash.success = function(json) {
-    //TODO-log        console.log('ajax success', method, json);
-            resolve(json);
-          };
-
-          hash.error = function(jqXHR, textStatus, errorThrown) {
-            if (jqXHR) {
-              jqXHR.then = null;
-            }
-    //TODO-log        console.log('ajax error', method, jqXHR);
-
-            reject(jqXHR);
-          };
-
-          Orbit.ajax(hash);
-        });
-      },
-
-      _buildURL: function(type, remoteId) {
-        var host = this.host,
-            namespace = this.namespace,
-            url = [];
-
-        if (host) { url.push(host); }
-        if (namespace) { url.push(namespace); }
-        url.push(this._pathForType(type));
-        if (remoteId) { url.push(remoteId); }
-
-        url = url.join('/');
-        if (!host) { url = '/' + url; }
-
-        return url;
-      },
-
-      _pathForType: function(type) {
-        return this._pluralize(type);
-      },
-
-      _pluralize: function(name) {
-        // TODO - allow for pluggable inflector
-        return name + 's';
-      },
-
-      _serialize: function(type, data) {
-        var serialized = clone(data);
-        delete serialized[this.schema.idField];
-
-        if (serialized.links) {
-          var links = {};
-          for (var i in serialized.links) {
-            var link = serialized.links[i];
-            if (typeof link === 'object') {
-              links[i] = Object.keys(link);
-            } else {
-              links[i] = link;
-            }
-          }
-          serialized.links = links;
-        }
-
-        return serialized;
-      },
-
-      _deserialize: function(type, data) {
-        return data;
-      }
-    });
-
-    return JSONAPISource;
-  });
-define("orbit/sources/local_storage_source",
-  ["orbit/core","orbit/sources/memory_source"],
-  function(Orbit, MemorySource) {
-    "use strict";
-
-    var supportsLocalStorage = function() {
-      try {
-        return 'localStorage' in window && window['localStorage'] !== null;
-      } catch(e) {
-        return false;
-      }
-    };
-
-    var LocalStorageSource = function() {
-      this.init.apply(this, arguments);
-    };
-
-    Orbit.extend(LocalStorageSource.prototype, MemorySource.prototype, {
-      constructor: LocalStorageSource,
-
-      init: function(schema, options) {
-        Orbit.assert('Your browser does not support local storage!', supportsLocalStorage());
-
-        MemorySource.prototype.init.apply(this, arguments);
-
-        options = options || {};
-        this.namespace = options['namespace'] || 'orbit'; // local storage key
-        this._autosave = options['autosave'] !== undefined ? options['autosave'] : true;
-        var autoload = options['autoload'] !== undefined ? options['autoload'] : true;
-
-        this._isDirty = false;
-
-        this.on('didTransform', function() {
-          this._saveData();
-        }, this);
-
-        if (autoload) this.load();
-      },
-
-      load: function() {
-        var storage = window.localStorage.getItem(this.namespace);
-        if (storage) {
-          this.reset(JSON.parse(storage));
-        }
-      },
-
-      enableAutosave: function() {
-        if (!this._autosave) {
-          this._autosave = true;
-          if (this._isDirty) this._saveData();
-        }
-      },
-
-      disableAutosave: function() {
-        if (this._autosave) {
-          this._autosave = false;
-        }
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Internals
-      /////////////////////////////////////////////////////////////////////////////
-
-      _saveData: function(forceSave) {
-        if (!this._autosave && !forceSave) {
-          this._isDirty = true;
-          return;
-        }
-        window.localStorage.setItem(this.namespace, JSON.stringify(this.retrieve()));
-        this._isDirty = false;
-      }
-    });
-
-    return LocalStorageSource;
-  });
-define("orbit/sources/memory_source",
-  ["orbit/core","orbit/sources/source"],
-  function(Orbit, Source) {
-    "use strict";
-
-    var MemorySource = function() {
-      this.init.apply(this, arguments);
-    };
-
-    Orbit.extend(MemorySource.prototype, Source.prototype, {
-      constructor: MemorySource,
-
-      init: function(schema, options) {
-        Orbit.assert('MemorySource requires Orbit.Promise to be defined', Orbit.Promise);
-
-        Source.prototype.init.apply(this, arguments);
-      },
-
-      initRecord: function(type, record) {
-        this._cache.initRecord(type, record);
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Transformable interface implementation
-      /////////////////////////////////////////////////////////////////////////////
-
-      _transform: function(operation) {
-        var inverse = this._cache.transform(operation, true);
-        this.didTransform(operation, inverse);
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Requestable interface implementation
-      /////////////////////////////////////////////////////////////////////////////
-
-      _find: function(type, id) {
-        var _this = this;
-
-        return new Orbit.Promise(function(resolve, reject) {
-          if (id === undefined || typeof id === 'object') {
-            resolve(_this._filter.call(_this, type, id));
-          } else {
-            var record = _this.retrieve([type, id]);
-            if (record) {
-              resolve(record);
-            } else {
-              reject(new Orbit.NotFoundException(type, id));
-            }
-          }
-        });
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Internals
-      /////////////////////////////////////////////////////////////////////////////
-
-      _filter: function(type, query) {
-        var all = [],
-            dataForType,
-            i,
-            prop,
-            match,
-            record;
-
-        dataForType = this.retrieve([type]);
-
-        for (i in dataForType) {
-          if (dataForType.hasOwnProperty(i)) {
-            record = dataForType[i];
-            if (query === undefined) {
-              match = true;
-            } else {
-              match = false;
-              for (prop in query) {
-                if (record[prop] === query[prop]) {
-                  match = true;
-                } else {
-                  match = false;
-                  break;
-                }
-              }
-            }
-            if (match) all.push(record);
-          }
-        }
-        return all;
-      }
-    });
-
-    return MemorySource;
-  });
-define("orbit/sources/source",
-  ["orbit/core","orbit/cache","orbit/document","orbit/transformable","orbit/requestable"],
-  function(Orbit, Cache, Document, Transformable, Requestable) {
-    "use strict";
-
-    var Source = function() {
-      this.init.apply(this, arguments);
-    };
-
-    Source.prototype = {
-      constructor: Source,
-
-      init: function(schema, options) {
-        Orbit.assert("Source's `schema` must be specified", schema);
-        Orbit.assert("Source's `schema.idField` must be specified", schema.idField);
-
-        this.schema = schema;
-
-        options = options || {};
-
-        // Create an internal cache and expose some elements of its interface
-        this._cache = new Cache(schema);
-        Orbit.expose(this, this._cache, 'length', 'reset', 'retrieve');
-
-        Transformable.extend(this);
-        Requestable.extend(this, ['find', 'add', 'update', 'patch', 'remove', 'link', 'unlink']);
-      },
-
-      initRecord: Orbit.K,
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Transformable interface implementation
-      /////////////////////////////////////////////////////////////////////////////
-
-      _transform: Orbit.K,
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Requestable interface implementation
-      /////////////////////////////////////////////////////////////////////////////
-
-      _find: Orbit.K,
-
-      _add: function(type, data) {
-        this.initRecord(type, data);
-
-        var id = data[this.schema.idField],
-            path = [type, id],
-            _this = this;
-
-        return this.transform({op: 'add', path: path, value: data}).then(function() {
-          return _this.retrieve(path);
-        });
-      },
-
-      _update: function(type, data) {
-        this.initRecord(type, data);
-
-        var id = data[this.schema.idField],
-            path = [type, id],
-            _this = this;
-
-        return this.transform({op: 'replace', path: path, value: data}).then(function() {
-          return _this.retrieve(path);
-        });
-      },
-
-      _patch: function(type, id, property, value) {
-        if (typeof id === 'object') {
-          var record = id;
-          this.initRecord(type, record);
-          id = record[this.schema.idField];
-        }
-
-        return this.transform({
-          op: 'replace',
-          path: [type, id].concat(Document.prototype.deserializePath(property)),
-          value: value
-        });
-      },
-
-      _remove: function(type, id) {
-        if (typeof id === 'object') {
-          var record = id;
-          this.initRecord(type, record);
-          id = record[this.schema.idField];
-        }
-
-        return this.transform({op: 'remove', path: [type, id]});
-      },
-
-      _link: function(type, id, property, value) {
-        var linkOp = function(linkDef, type, id, property, value) {
-          var path = [type, id, 'links', property];
-          if (linkDef.type === 'hasMany') {
-            path.push(value);
-            value = true;
-          }
-          return {
-            op: 'add',
-            path: path,
-            value: value
-          };
-        };
-
-        var linkDef = this.schema.models[type].links[property],
-            ops,
-            _this = this;
-
-        // Normalize ids
-        if (typeof id === 'object') {
-          var record = id;
-          this.initRecord(type, record);
-          id = record[this.schema.idField];
-        }
-        if (typeof value === 'object') {
-          var relatedRecord = value;
-          this.initRecord(linkDef.model, relatedRecord);
-          value = relatedRecord[this.schema.idField];
-        }
-
-        // Add link to primary resource
-        ops = [linkOp(linkDef, type, id, property, value)];
-
-        // Add inverse link if necessary
-        if (linkDef.inverse) {
-          var inverseLinkDef = this.schema.models[linkDef.model].links[linkDef.inverse];
-          ops.push(linkOp(inverseLinkDef, linkDef.model, value, linkDef.inverse, id));
-        }
-
-        return this.transform(ops).then(function() {
-          return _this.retrieve([type, id]);
-        });
-      },
-
-      _unlink: function(type, id, property, value) {
-        var unlinkOp = function(linkDef, type, id, property, value) {
-          var path = [type, id, 'links', property];
-          if (linkDef.type === 'hasMany') path.push(value);
-          return {
-            op: 'remove',
-            path: path
-          };
-        };
-
-        var linkDef = this.schema.models[type].links[property],
-            ops,
-            record,
-            relatedRecord,
-            _this = this;
-
-        // Normalize ids
-        if (typeof id === 'object') {
-          record = id;
-          this.initRecord(type, record);
-          id = record[this.schema.idField];
-        }
-        if (typeof value === 'object') {
-          relatedRecord = value;
-          this.initRecord(linkDef.model, relatedRecord);
-          value = relatedRecord[this.schema.idField];
-        }
-
-        // Remove link from primary resource
-        ops = [unlinkOp(linkDef, type, id, property, value)];
-
-        // Remove inverse link if necessary
-        if (linkDef.inverse) {
-          if (value === undefined) {
-            if (record === undefined) {
-              record = this.retrieve(type, id);
-            }
-            value = record.links[property];
-          }
-
-          var inverseLinkDef = this.schema.models[linkDef.model].links[linkDef.inverse];
-          ops.push(unlinkOp(inverseLinkDef, linkDef.model, value, linkDef.inverse, id));
-        }
-
-        return this.transform(ops).then(function() {
-          return _this.retrieve([type, id]);
-        });
-      }
-    };
-
-    return Source;
-  });
-define("orbit/transaction",
-  ["orbit/core"],
-  function(Orbit) {
-    "use strict";
-
     var Transaction = function() {
       this.init.apply(this, arguments);
     };
@@ -1985,103 +1519,16 @@ define("orbit/transaction",
       }
     };
 
-    return Transaction;
+    __exports__["default"] = Transaction;
   });
-define("orbit/transform_queue",
-  ["orbit/core"],
-  function(Orbit) {
+define("orbit/transformable", 
+  ["orbit/main","orbit/evented","orbit/action_queue","orbit/lib/assert","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
     "use strict";
-
-    var TransformQueue = function() {
-      this.init.apply(this, arguments);
-    };
-
-    TransformQueue.prototype = {
-      constructor: TransformQueue,
-
-      init: function(target) {
-        Orbit.assert('TransformQueue requires Orbit.Promise to be defined', Orbit.Promise);
-
-        this.target = target;
-        this._queue = [];
-        this.processing = false;
-        this.autoProcess = true;
-      },
-
-      push: function(operation) {
-        var _this = this;
-
-    //TODO-log    console.log('>>>> TransformQueue', _this.target.id, operation);
-
-        var response = new Orbit.Promise(function(resolve) {
-          var transform = {
-            resolver: function() {
-              var ret = _this.target._transform.call(_this.target, operation);
-              if (ret) {
-                return ret.then(
-                  function() {
-                    resolve();
-                  }
-                );
-              } else {
-                resolve();
-              }
-            },
-            op: operation
-          };
-
-          _this._queue.push(transform);
-        });
-
-        if (this.autoProcess) this.process();
-
-        return response;
-      },
-
-      process: function() {
-        if (!this.processing) {
-          var _this = this;
-
-          _this.processing = true;
-
-          var settleEach = function() {
-            if (_this._queue.length === 0) {
-
-              _this.processing = false;
-    //TODO-log          console.log('---- TransformQueue', _this.target.id, 'EMPTY');
-
-            } else {
-              var transform = _this._queue.shift();
-
-    //TODO-log          console.log('<<<< TransformQueue', _this.target.id, transform.operation);
-
-              var ret = transform.resolver.call(_this);
-              if (ret) {
-                return ret.then(
-                  function(success) {
-                    settleEach();
-                  },
-                  function(error) {
-                    settleEach();
-                  }
-                );
-              } else {
-                settleEach();
-              }
-            }
-          };
-
-          settleEach();
-        }
-      }
-    };
-
-    return TransformQueue;
-  });
-define("orbit/transformable",
-  ["orbit/core","orbit/evented","orbit/transform_queue"],
-  function(Orbit, Evented, TransformQueue) {
-    "use strict";
+    var Orbit = __dependency1__["default"];
+    var Evented = __dependency2__["default"];
+    var ActionQueue = __dependency3__["default"];
+    var assert = __dependency4__.assert;
 
     var normalizeOperation = function(op) {
       if (typeof op.path === 'string') op.path = op.path.split('/');
@@ -2172,7 +1619,7 @@ define("orbit/transformable",
       extend: function(object, actions) {
         if (object._transformable === undefined) {
           object._transformable = true;
-          object.transformQueue = new TransformQueue(object);
+          object.transformQueue = new ActionQueue(object._transform, object);
           object._completedTransforms = [];
 
           Evented.extend(object);
@@ -2182,7 +1629,7 @@ define("orbit/transformable",
           };
 
           object.transform = function(operation) {
-            Orbit.assert('_transform must be defined', object._transform);
+            assert('_transform must be defined', object._transform);
 
             if (Object.prototype.toString.call(operation) === '[object Array]') {
               return transformMany.call(object, operation);
@@ -2195,5 +1642,5 @@ define("orbit/transformable",
       }
     };
 
-    return Transformable;
+    __exports__["default"] = Transformable;
   });

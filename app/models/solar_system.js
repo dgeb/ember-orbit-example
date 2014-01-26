@@ -23,7 +23,7 @@ export default Ember.Object.extend({
       }
     };
 
-    var orbitStore = new Orbit.LocalStorageSource(schema, {
+    var orbitStore = new OC.LocalStorageSource(schema, {
       namespace: this.get('name')
     });
 

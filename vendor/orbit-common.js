@@ -1,12 +1,21 @@
 define("orbit_common",
-  ["orbit_common/main","orbit_common/cache","orbit_common/schema","orbit_common/source","orbit_common/memory_source"],
-  function(OC, Cache, Schema, Source, MemorySource) {
+  ["orbit_common/lib/exceptions","orbit_common/main","orbit_common/cache","orbit_common/id_map","orbit_common/schema","orbit_common/source","orbit_common/memory_source"],
+  function(__dependency1__, OC, Cache, IdMap, Schema, Source, MemorySource) {
     "use strict";
+    var OperationNotAllowed = __dependency1__.OperationNotAllowed;
+    var RecordNotFoundException = __dependency1__.RecordNotFoundException;
+    var LinkNotFoundException = __dependency1__.LinkNotFoundException;
+    var RecordAlreadyExistsException = __dependency1__.RecordAlreadyExistsException;
 
     OC.Cache = Cache;
     OC.Schema = Schema;
     OC.Source = Source;
     OC.MemorySource = MemorySource;
+    // exceptions
+    OC.OperationNotAllowed = OperationNotAllowed;
+    OC.RecordNotFoundException = RecordNotFoundException;
+    OC.LinkNotFoundException = LinkNotFoundException;
+    OC.RecordAlreadyExistsException = RecordAlreadyExistsException;
 
 
     return OC;
@@ -58,8 +67,18 @@ define("orbit_common/cache",
         this.schema = schema;
         for (var model in schema.models) {
           if (schema.models.hasOwnProperty(model)) {
-            this._doc.add([model], {});
+            this._registerModel(model);
           }
+        }
+
+        // TODO - clean up listener
+        this.schema.on('modelRegistered', this._registerModel, this);
+      },
+
+      _registerModel: function(model) {
+        var modelRootPath = [model];
+        if (!this.retrieve(modelRootPath)) {
+          this._doc.add(modelRootPath, {});
         }
       },
 
@@ -752,8 +771,8 @@ define("orbit_common/memory_source",
     return MemorySource;
   });
 define("orbit_common/schema",
-  ["orbit/lib/objects","orbit_common/lib/exceptions","orbit_common/id_map"],
-  function(__dependency1__, __dependency2__, IdMap) {
+  ["orbit/lib/objects","orbit_common/lib/exceptions","orbit/evented","orbit_common/id_map"],
+  function(__dependency1__, __dependency2__, Evented, IdMap) {
     "use strict";
     var clone = __dependency1__.clone;
     var OperationNotAllowed = __dependency2__.OperationNotAllowed;
@@ -828,12 +847,18 @@ define("orbit_common/schema",
         if (this.idField !== this.remoteIdField) {
           this._idMap = new IdMap(this.idField, this.remoteIdField);
         }
+        Evented.extend(this);
+      },
+
+      registerModel: function(type, definition) {
+        this.models[type] = definition;
+        this.emit('modelRegistered', type);
       },
 
       normalize: function(type, data) {
         if (data.__normalized) return data;
 
-        var record = data; //clone(data);
+        var record = data; // TODO? clone(data);
 
         // set flag
         record.__normalized = true;
@@ -985,6 +1010,7 @@ define("orbit_common/source",
         // Create an internal cache and expose some elements of its interface
         this._cache = new Cache(schema);
         expose(this, this._cache, 'length', 'reset', 'retrieve');
+        // TODO - clean up listener
         this._cache.on('didTransform', this._cacheDidTransform, this);
 
         Transformable.extend(this);

@@ -1,6 +1,6 @@
 define("orbit",
-  ["orbit/lib/assert","orbit/lib/config","orbit/lib/diffs","orbit/lib/eq","orbit/lib/exceptions","orbit/lib/objects","orbit/lib/strings","orbit/lib/stubs","orbit/main","orbit/action_queue","orbit/document","orbit/evented","orbit/notifier","orbit/requestable","orbit/transaction","orbit/transformable","orbit/request_connector","orbit/transform_connector"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __dependency6__, __dependency7__, __dependency8__, Orbit, ActionQueue, Document, Evented, Notifier, Requestable, Transaction, Transformable, RequestConnector, TransformConnector) {
+  ["orbit/lib/assert","orbit/lib/config","orbit/lib/diffs","orbit/lib/eq","orbit/lib/exceptions","orbit/lib/objects","orbit/lib/strings","orbit/lib/stubs","orbit/main","orbit/action_queue","orbit/document","orbit/evented","orbit/notifier","orbit/requestable","orbit/request_connector","orbit/transaction","orbit/transformable","orbit/transform_connector"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __dependency6__, __dependency7__, __dependency8__, Orbit, ActionQueue, Document, Evented, Notifier, Requestable, RequestConnector, Transaction, Transformable, TransformConnector) {
     "use strict";
     var assert = __dependency1__.assert;
     var arrayToOptions = __dependency2__.arrayToOptions;
@@ -10,6 +10,8 @@ define("orbit",
     var clone = __dependency6__.clone;
     var expose = __dependency6__.expose;
     var extend = __dependency6__.extend;
+    var isArray = __dependency6__.isArray;
+    var isNone = __dependency6__.isNone;
     var capitalize = __dependency7__.capitalize;
     var noop = __dependency8__.noop;
     var required = __dependency8__.required;
@@ -19,9 +21,9 @@ define("orbit",
     Orbit.Evented = Evented;
     Orbit.Notifier = Notifier;
     Orbit.Requestable = Requestable;
+    Orbit.RequestConnector = RequestConnector;
     Orbit.Transaction = Transaction;
     Orbit.Transformable = Transformable;
-    Orbit.RequestConnector = RequestConnector;
     Orbit.TransformConnector = TransformConnector;
     // lib fns
     Orbit.assert = assert;
@@ -32,6 +34,8 @@ define("orbit",
     Orbit.clone = clone;
     Orbit.expose = expose;
     Orbit.extend = extend;
+    Orbit.isArray = isArray;
+    Orbit.isNone = isNone;
     Orbit.capitalize = capitalize;
     Orbit.noop = noop;
     Orbit.required = required;

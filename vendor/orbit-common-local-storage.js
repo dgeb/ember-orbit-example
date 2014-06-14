@@ -1,18 +1,9 @@
-define("orbit_common_local_storage_source", 
-  ["orbit_common/local_storage_source","exports"],
-  function(__dependency1__, __exports__) {
+define("orbit_common/local_storage_source",
+  ["orbit/lib/assert","orbit/lib/objects","orbit_common/memory_source"],
+  function(__dependency1__, __dependency2__, MemorySource) {
     "use strict";
-    var LocalStorageSource = __dependency1__["default"];
-
-    __exports__["default"] = LocalStorageSource;
-  });
-define("orbit_common/local_storage_source", 
-  ["orbit_common/memory_source","orbit/lib/assert","orbit/lib/objects","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
-    "use strict";
-    var MemorySource = __dependency1__["default"];
-    var assert = __dependency2__.assert;
-    var extend = __dependency3__.extend;
+    var assert = __dependency1__.assert;
+    var extend = __dependency2__.extend;
 
     var supportsLocalStorage = function() {
       try {
@@ -22,6 +13,16 @@ define("orbit_common/local_storage_source",
       }
     };
 
+    /**
+     Source for storing data in local storage
+
+     @class LocalStorageSource
+     @extends MemorySource
+     @namespace OC
+     @param {OC.Schema} schema
+     @param {Object}    [options]
+     @constructor
+     */
     var LocalStorageSource = function() {
       this.init.apply(this, arguments);
     };
@@ -82,5 +83,5 @@ define("orbit_common/local_storage_source",
       }
     });
 
-    __exports__["default"] = LocalStorageSource;
+    return LocalStorageSource;
   });

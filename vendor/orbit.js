@@ -1,32 +1,20 @@
-define("orbit", 
-  ["./orbit/main","./orbit/action_queue","./orbit/cache","./orbit/document","./orbit/evented","./orbit/notifier","./orbit/requestable","./orbit/transaction","./orbit/transformable","./orbit/connectors/request_connector","./orbit/connectors/transform_connector","./orbit/lib/assert","./orbit/lib/config","./orbit/lib/diffs","./orbit/lib/eq","./orbit/lib/exceptions","./orbit/lib/objects","./orbit/lib/strings","./orbit/lib/stubs","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __dependency6__, __dependency7__, __dependency8__, __dependency9__, __dependency10__, __dependency11__, __dependency12__, __dependency13__, __dependency14__, __dependency15__, __dependency16__, __dependency17__, __dependency18__, __dependency19__, __exports__) {
+define("orbit",
+  ["orbit/lib/assert","orbit/lib/config","orbit/lib/diffs","orbit/lib/eq","orbit/lib/exceptions","orbit/lib/objects","orbit/lib/strings","orbit/lib/stubs","orbit/main","orbit/action_queue","orbit/document","orbit/evented","orbit/notifier","orbit/requestable","orbit/transaction","orbit/transformable","orbit/request_connector","orbit/transform_connector"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __dependency6__, __dependency7__, __dependency8__, Orbit, ActionQueue, Document, Evented, Notifier, Requestable, Transaction, Transformable, RequestConnector, TransformConnector) {
     "use strict";
-    var Orbit = __dependency1__["default"];
-    var ActionQueue = __dependency2__["default"];
-    var Cache = __dependency3__["default"];
-    var Document = __dependency4__["default"];
-    var Evented = __dependency5__["default"];
-    var Notifier = __dependency6__["default"];
-    var Requestable = __dependency7__["default"];
-    var Transaction = __dependency8__["default"];
-    var Transformable = __dependency9__["default"];
-    var RequestConnector = __dependency10__["default"];
-    var TransformConnector = __dependency11__["default"];
-    var assert = __dependency12__.assert;
-    var arrayToOptions = __dependency13__.arrayToOptions;
-    var diffs = __dependency14__.diffs;
-    var eq = __dependency15__.eq;
-    var PathNotFoundException = __dependency16__.PathNotFoundException;
-    var clone = __dependency17__.clone;
-    var expose = __dependency17__.expose;
-    var extend = __dependency17__.extend;
-    var capitalize = __dependency18__.capitalize;
-    var noop = __dependency19__.noop;
-    var required = __dependency19__.required;
+    var assert = __dependency1__.assert;
+    var arrayToOptions = __dependency2__.arrayToOptions;
+    var diffs = __dependency3__.diffs;
+    var eq = __dependency4__.eq;
+    var PathNotFoundException = __dependency5__.PathNotFoundException;
+    var clone = __dependency6__.clone;
+    var expose = __dependency6__.expose;
+    var extend = __dependency6__.extend;
+    var capitalize = __dependency7__.capitalize;
+    var noop = __dependency8__.noop;
+    var required = __dependency8__.required;
 
     Orbit.ActionQueue = ActionQueue;
-    Orbit.Cache = Cache;
     Orbit.Document = Document;
     Orbit.Evented = Evented;
     Orbit.Notifier = Notifier;
@@ -48,16 +36,47 @@ define("orbit",
     Orbit.noop = noop;
     Orbit.required = required;
 
-    __exports__["default"] = Orbit;
+    return Orbit;
   });
-define("orbit/action_queue", 
-  ["orbit/main","orbit/evented","orbit/lib/assert","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
+define("orbit/action_queue",
+  ["orbit/lib/assert","orbit/main","orbit/evented"],
+  function(__dependency1__, Orbit, Evented) {
     "use strict";
-    var Orbit = __dependency1__["default"];
-    var Evented = __dependency2__["default"];
-    var assert = __dependency3__.assert;
+    var assert = __dependency1__.assert;
 
+    /**
+     `ActionQueue` is a FIFO queue of actions that should be performed sequentially.
+
+     All actions are calls to the same function and context. However, arguments for
+     each call can vary in both value and length.
+
+     If action calls return a promise, then that promise will be settled before the
+     next action is de-queued and call. If action calls don't return anything, then
+     the next action will be de-queued and called immediately.
+
+     @example
+
+     ``` javascript
+     var transform = function(operation) {
+       // perform operation here
+     };
+
+     var queue = new ActionQueue(transform);
+
+     // push operations into queue synchronously so that they'll be performed
+     // sequentially
+     queue.push({op: 'add', path: ['planets', '123'], value: 'Mercury'});
+     queue.push({op: 'add', path: ['planets', '234'], value: 'Venus'});
+     ```
+
+     @class ActionQueue
+     @namespace Orbit
+     @param {Function} fn Function to be called in order to process actions
+     @param {Object}   [context] Context in which `fn` should be called
+     @param {Object}   [options]
+     @param {Boolean}  [options.autoProcess=true] Are actions automatically processed as soon as they are pushed?
+     @constructor
+     */
     var ActionQueue = function() {
       this.init.apply(this, arguments);
     };
@@ -138,304 +157,52 @@ define("orbit/action_queue",
 
           settleEach();
         }
-      }
-    };
-
-    __exports__["default"] = ActionQueue;
-  });
-define("orbit/cache", 
-  ["orbit/document","orbit/lib/objects","exports"],
-  function(__dependency1__, __dependency2__, __exports__) {
-    "use strict";
-    var Document = __dependency1__["default"];
-    var expose = __dependency2__.expose;
-
-    var Cache = function() {
-      this.init.apply(this, arguments);
-    };
-
-    Cache.prototype = {
-      constructor: Cache,
-
-      init: function(schema) {
-        this._doc = new Document(null, {arrayBasedPaths: true});
-
-        // Expose methods from the Document interface
-        expose(this, this._doc, 'reset', 'transform');
-
-        this.schema = schema;
-        for (var model in schema.models) {
-          if (schema.models.hasOwnProperty(model)) {
-            this._doc.add([model], {});
-          }
-        }
       },
 
-      // TODO - move to schema
-      initRecord: function(type, data) {
-        if (data[this.schema.idField] !== undefined) return;
+      then: function(success, failure) {
+        var self = this;
 
-        var modelSchema = this.schema.models[type],
-            attributes = modelSchema.attributes,
-            links = modelSchema.links;
-
-        // init id
-        data[this.schema.idField] = this.generateId();
-
-        // init default values
-        if (attributes) {
-          for (var attribute in attributes) {
-            if (data[attribute] === undefined && attributes[attribute].defaultValue) {
-              if (typeof attributes[attribute].defaultValue === 'function') {
-                data[attribute] = attributes[attribute].defaultValue.call(data);
-              } else {
-                data[attribute] = attributes[attribute].defaultValue;
-              }
-            }
-          }
-        }
-
-        // init links
-        if (links) {
-          data.links = {};
-          for (var link in links) {
-            if (data.links[link] === undefined && links[link].type === 'hasMany') {
-              data.links[link] = {};
-            }
-          }
-        }
-      },
-
-      // TODO - move to schema
-      generateId: function() {
-        if (this._newId) {
-          this._newId++;
-        } else {
-          this._newId = 1;
-        }
-        return new Date().getTime() + '.' + this._newId;
-      },
-
-      length: function(path) {
-        return Object.keys(this.retrieve(path)).length;
-      },
-
-      retrieve: function(path) {
-        try {
-          return this._doc.retrieve(path);
-        } catch(e) {
-          return null;
-        }
-      }
-    };
-
-    __exports__["default"] = Cache;
-  });
-define("orbit/connectors/request_connector", 
-  ["orbit/requestable","orbit/lib/assert","orbit/lib/config","orbit/lib/strings","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
-    "use strict";
-    var Requestable = __dependency1__["default"];
-    var assert = __dependency2__.assert;
-    var arrayToOptions = __dependency3__.arrayToOptions;
-    var capitalize = __dependency4__.capitalize;
-
-    var RequestConnector = function(primarySource, secondarySource, options) {
-      var _this = this;
-
-      this.primarySource = primarySource;
-      this.secondarySource = secondarySource;
-
-      options = options || {};
-
-      this.actions = options.actions || Requestable.defaultActions;
-      if (options.types) this.types = arrayToOptions(options.types);
-
-      this.mode = options.mode !== undefined ? options.mode : 'rescue';
-      assert("`mode` must be 'assist' or 'rescue'", this.mode === 'assist' ||
-                                                          this.mode === 'rescue');
-
-      var active = options.active !== undefined ? options.active : true;
-      if (active) this.activate();
-    };
-
-    RequestConnector.prototype = {
-      constructor: RequestConnector,
-
-      activate: function() {
-        var _this = this,
-            handler;
-
-        if (this._active) return;
-
-        this.handlers = {};
-
-        this.actions.forEach(function(action) {
-          if (_this.types) {
-            handler = function(type) {
-              if (_this.types[type]) {
-                return _this.secondarySource[action].apply(_this.secondarySource, arguments);
-              }
-            };
+        return new Orbit.Promise(function(resolve) {
+          if (self.processing) {
+            self.one('didComplete', function () {
+              resolve();
+            });
           } else {
-            handler = _this.secondarySource[action];
+            resolve();
           }
-
-          _this.primarySource.on(_this.mode + capitalize(action),
-            handler,
-            _this.secondarySource
-          );
-
-          _this.handlers[action] = handler;
-        });
-
-        this._active = true;
-      },
-
-      deactivate: function() {
-        var _this = this;
-
-        this.actions.forEach(function(action) {
-          this.primarySource.off(_this.mode + capitalize(action),
-            _this.handlers[action],
-            _this.secondarySource
-          );
-        });
-
-        this._active = false;
-      },
-
-      isActive: function() {
-        return this._active;
+        }).then(success, failure);
       }
     };
 
-    __exports__["default"] = RequestConnector;
+    return ActionQueue;
   });
-define("orbit/connectors/transform_connector", 
-  ["orbit/action_queue","orbit/lib/objects","orbit/lib/diffs","orbit/lib/eq","orbit/lib/config","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __dependency5__, __exports__) {
-    "use strict";
-    var ActionQueue = __dependency1__["default"];
-    var clone = __dependency2__.clone;
-    var diffs = __dependency3__.diffs;
-    var eq = __dependency4__.eq;
-    var arrayToOptions = __dependency5__.arrayToOptions;
-
-    var TransformConnector = function(source, target, options) {
-      this.source = source;
-      this.target = target;
-      this.transformQueue = new ActionQueue(this.transform, this, {autoProcess: false});
-
-      options = options || {};
-    // TODO - allow filtering of transforms
-    //  if (options.actions) this.actions = arrayToOptions(options.actions);
-    //  if (options.types) this.types = arrayToOptions(options.types);
-      this.blocking = options.blocking !== undefined ? options.blocking : true;
-      var active = options.active !== undefined ? options.active : true;
-
-      if (active) this.activate();
-    };
-
-    TransformConnector.prototype = {
-      constructor: TransformConnector,
-
-      activate: function() {
-        var _this = this;
-
-        if (this._active) return;
-
-        this.source.on('didTransform',  this._processTransform,  this);
-        this.target.transformQueue.on('didComplete', this.transformQueue.process, this.transformQueue);
-
-        this._active = true;
-      },
-
-      deactivate: function() {
-        this.source.off('didTransform',  this._processTransform,  this);
-        this.target.transformQueue.off('didComplete', this.transformQueue.process, this.transformQueue);
-
-        this._active = false;
-      },
-
-      isActive: function() {
-        return this._active;
-      },
-
-      transform: function(operation) {
-        //TODO-log  console.log('****', ' transform from ', this.source.id, ' to ', this.target.id, operation);
-
-        if (this.target.retrieve) {
-          var currentValue = this.target.retrieve(operation.path);
-
-          if (currentValue) {
-            if (operation.op === 'add' || operation.op === 'replace') {
-              if (eq(currentValue, operation.value)) {
-                //TODO-log  console.log('==', ' transform from ', this.source.id, ' to ', this.target.id, operation);
-                return;
-              } else {
-                return this.resolveConflicts(operation.path, currentValue, operation.value);
-              }
-            }
-          } else if (operation.op === 'remove') {
-            return;
-          }
-        }
-
-        return this.target.transform(operation);
-      },
-
-      resolveConflicts: function(path, currentValue, updatedValue) {
-        var ops = diffs(currentValue, updatedValue, {basePath: path});
-
-        //TODO-log  console.log(this.target.id, 'resolveConflicts', path, currentValue, updatedValue, ops);
-
-        return this.target.transform(ops);
-      },
-
-      /////////////////////////////////////////////////////////////////////////////
-      // Internals
-      /////////////////////////////////////////////////////////////////////////////
-
-      _processTransform: function(operation) {
-    // TODO - add filtering back in
-    //    if (this.actions && !this.actions[action]) return;
-    //    if (this.types && !this.types[type]) return;
-
-    //    console.log(this.target.id, 'processTransform', operation);
-        if (this.blocking) {
-          return this._applyOrQueueTransform(operation);
-
-        } else {
-          this._applyOrQueueTransform(operation);
-        }
-      },
-
-      _applyOrQueueTransform: function(operation) {
-        // If the target's transformQueue is processing, then we should queue up the
-        // transform on the connector instead of on the target.
-        // This ensures that comparisons are made against the target's most up to
-        // date state. Note that this connector's queue processing is triggered
-        // by the `didComplete` event for the target's queue.
-        if (this.target.transformQueue.processing) {
-          return this.transformQueue.push(operation);
-        }
-
-        return this.transform(operation);
-      }
-    };
-
-    __exports__["default"] = TransformConnector;
-  });
-define("orbit/document", 
-  ["orbit/lib/objects","orbit/lib/diffs","orbit/lib/eq","orbit/lib/exceptions","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
+define("orbit/document",
+  ["orbit/lib/objects","orbit/lib/diffs","orbit/lib/eq","orbit/lib/exceptions"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__) {
     "use strict";
     var clone = __dependency1__.clone;
+    var isArray = __dependency1__.isArray;
     var diffs = __dependency2__.diffs;
     var eq = __dependency3__.eq;
     var PathNotFoundException = __dependency4__.PathNotFoundException;
 
+    /**
+     `Document` is a complete implementation of the JSON PATCH spec detailed in
+     [RFC 6902](http://tools.ietf.org/html/rfc6902).
+
+     A document can be manipulated via a `transform` method that accepts an
+     `operation`, or with the methods `add`, `remove`, `replace`, `move`, `copy` and
+     `test`.
+
+     Data at a particular path can be retrieved from a `Document` with `retrieve()`.
+
+     @class Document
+     @namespace Orbit
+     @param {Object}  [data] The initial data for the document
+     @param {Object}  [options]
+     @param {Boolean} [options.arrayBasedPaths=false] Should paths be array based, or `'/'` delimited (the default)?
+     @constructor
+     */
     var Document = function() {
       this.init.apply(this, arguments);
     };
@@ -449,38 +216,156 @@ define("orbit/document",
         this.reset(data);
       },
 
+      /**
+       Reset the contents of the whole document.
+
+       If no data is specified, the contents of the document will be reset to an
+       empty object.
+
+       @method reset
+       @param {Object} [data] New root object
+       */
       reset: function(data) {
         this._data = data || {};
       },
 
+      /**
+       Retrieve the value at a path.
+
+       Throws `PathNotFoundException` if the path does not exist in the document.
+
+       @method retrieve
+       @param {Array or String} path
+       @returns {Object} Object at the specified `path`
+       */
       retrieve: function(path) {
         return this._retrieve(this.deserializePath(path));
       },
 
+      /**
+       Sets the value at a path.
+
+       If the target location specifies an array index, inserts a new value
+       into the array at the specified index.
+
+       If the target location specifies an object member that does not
+       already exist, adds a new member to the object.
+
+       If the target location specifies an object member that does exist,
+       replaces that member's value.
+
+       If the target location does not exist, throws `PathNotFoundException`.
+
+       @method add
+       @param {Array or String} path
+       @param {Object} value
+       @param {Boolean} [invert=false] Return the inverse operations?
+       @returns {Array} Array of inverse operations if `invert === true`
+       */
       add: function(path, value, invert) {
         return this._add(this.deserializePath(path), value, invert);
       },
 
+      /**
+       Removes the value from a path.
+
+       If removing an element from an array, shifts any elements above the
+       specified index one position to the left.
+
+       If the target location does not exist, throws `PathNotFoundException`.
+
+       @method remove
+       @param {Array or String} path
+       @param {Boolean} [invert=false] Return the inverse operations?
+       @returns {Array} Array of inverse operations if `invert === true`
+       */
       remove: function(path, invert) {
         return this._remove(this.deserializePath(path), invert);
       },
 
+      /**
+       Replaces the value at a path.
+
+       This operation is functionally identical to a "remove" operation for
+       a value, followed immediately by an "add" operation at the same
+       location with the replacement value.
+
+       If the target location does not exist, throws `PathNotFoundException`.
+
+       @method replace
+       @param {Array or String} path
+       @param {Object} value
+       @param {Boolean} [invert=false] Return the inverse operations?
+       @returns {Array} Array of inverse operations if `invert === true`
+       */
       replace: function(path, value, invert) {
         return this._replace(this.deserializePath(path), value, invert);
       },
 
+      /**
+       Moves an object from one path to another.
+
+       Identical to calling `remove()` followed by `add()`.
+
+       Throws `PathNotFoundException` if either path does not exist in the document.
+
+       @method move
+       @param {Array or String} fromPath
+       @param {Array or String} toPath
+       @param {Boolean} [invert=false] Return the inverse operations?
+       @returns {Array} Array of inverse operations if `invert === true`
+       */
       move: function(fromPath, toPath, invert) {
         return this._move(this.deserializePath(fromPath), this.deserializePath(toPath), invert);
       },
 
+      /**
+       Copies an object at one path and adds it to another.
+
+       Identical to calling `add()` with the value at `fromPath`.
+
+       Throws `PathNotFoundException` if either path does not exist in the document.
+
+       @method copy
+       @param {Array or String} fromPath
+       @param {Array or String} toPath
+       @param {Boolean} [invert=false] Return the inverse operations?
+       @returns {Array} Array of inverse operations if `invert === true`
+       */
       copy: function(fromPath, toPath, invert) {
         return this._copy(this.deserializePath(fromPath), this.deserializePath(toPath), invert);
       },
 
+      /**
+       Tests that the value at a path matches an expectation.
+
+       Uses `Orbit.eq` to test equality.
+
+       Throws `PathNotFoundException` if the path does not exist in the document.
+
+       @method test
+       @param {Array or String} path
+       @param {Object} value Expected value to test
+       @returns {Boolean} Does the value at `path` equal `value`?
+       */
       test: function(path, value) {
         return eq(this._retrieve(this.deserializePath(path)), value);
       },
 
+      /**
+       Transforms the document with an RFC 6902-compliant operation.
+
+       Throws `PathNotFoundException` if the path does not exist in the document.
+
+       @method transform
+       @param {Object} operation
+       @param {String} operation.op Must be "add", "remove", "replace", "move", "copy", or "test"
+       @param {Array or String} operation.path Path to target location
+       @param {Array or String} operation.from Path to source target location. Required for "copy" and "move"
+       @param {Object} operation.value Value to set. Required for "add", "replace" and "test"
+       @param {Boolean} [invert=false] Return the inverse operations?
+       @returns {Array} Array of inverse operations if `invert === true`
+       */
       transform: function(operation, invert) {
         if (operation.op === 'add') {
           return this.add(operation.path, operation.value, invert);
@@ -546,7 +431,7 @@ define("orbit/document",
         if (path) {
           for (var i = 0, len = path.length; i < len; i++) {
             segment = path[i];
-            if (Object.prototype.toString.call(ptr) === '[object Array]') {
+            if (isArray(ptr)) {
               if (segment === '-') {
                 ptr = ptr[ptr.length-1];
               } else {
@@ -570,7 +455,7 @@ define("orbit/document",
           var parentKey = path[path.length-1];
           if (path.length > 1) {
             var grandparent = this._retrieve(path.slice(0, -1));
-            if (Object.prototype.toString.call(grandparent) === '[object Array]') {
+            if (isArray(grandparent)) {
               if (parentKey === '-') {
                 if (invert) {
                   inverse = [{op: 'remove', path: this.serializePath(path)}];
@@ -622,7 +507,7 @@ define("orbit/document",
           var parentKey = path[path.length-1];
           if (path.length > 1) {
             var grandparent = this._retrieve(path.slice(0, -1));
-            if (Object.prototype.toString.call(grandparent) === '[object Array]') {
+            if (isArray(grandparent)) {
               if (grandparent.length > 0) {
                 if (parentKey === '-') {
                   if (invert) {
@@ -680,7 +565,7 @@ define("orbit/document",
           var parentKey = path[path.length-1];
           if (path.length > 1) {
             var grandparent = this._retrieve(path.slice(0, -1));
-            if (Object.prototype.toString.call(grandparent) === '[object Array]') {
+            if (isArray(grandparent)) {
               if (grandparent.length > 0) {
                 if (parentKey === '-') {
                   if (invert) {
@@ -760,16 +645,14 @@ define("orbit/document",
       }
     };
 
-    __exports__["default"] = Document;
+    return Document;
   });
-define("orbit/evented", 
-  ["orbit/main","orbit/notifier","orbit/lib/assert","orbit/lib/objects","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
+define("orbit/evented",
+  ["orbit/lib/assert","orbit/lib/objects","orbit/main","orbit/notifier"],
+  function(__dependency1__, __dependency2__, Orbit, Notifier) {
     "use strict";
-    var Orbit = __dependency1__["default"];
-    var Notifier = __dependency2__["default"];
-    var assert = __dependency3__.assert;
-    var extend = __dependency4__.extend;
+    var assert = __dependency1__.assert;
+    var extend = __dependency2__.extend;
 
     var notifierForEvent = function(object, eventName, createIfUndefined) {
       var notifier = object._eventedNotifiers[eventName];
@@ -783,7 +666,87 @@ define("orbit/evented",
       delete object._eventedNotifiers[eventName];
     };
 
+    /**
+     The `Evented` interface uses notifiers to add events to an object. Like
+     notifiers, events will send along all of their arguments to subscribed
+     listeners.
+
+     The `Evented` interface can extend an object or prototype as follows:
+
+     ```javascript
+     var source = {};
+     Orbit.Evented.extend(source);
+     ```
+
+     Listeners can then register themselves for particular events with `on`:
+
+     ```javascript
+     var listener1 = function(message) {
+           console.log('listener1 heard ' + message);
+         },
+         listener2 = function(message) {
+           console.log('listener2 heard ' + message);
+         };
+
+     source.on('greeting', listener1);
+     source.on('greeting', listener2);
+
+     evented.emit('greeting', 'hello'); // logs "listener1 heard hello" and
+                                        //      "listener2 heard hello"
+     ```
+
+     Listeners can be unregistered from events at any time with `off`:
+
+     ```javascript
+     source.off('greeting', listener2);
+     ```
+
+     A listener can register itself for multiple events at once:
+
+     ```javascript
+     source.on('greeting salutation', listener2);
+     ```
+
+     And multiple events can be triggered sequentially at once,
+     assuming that you want to pass them all the same arguments:
+
+     ```javascript
+     source.emit('greeting salutation', 'hello', 'bonjour', 'guten tag');
+     ```
+
+     Last but not least, listeners can be polled
+     (note that spaces can't be used in event names):
+
+     ```javascript
+     source.on('question', function(question) {
+       if (question === 'favorite food?') return 'beer';
+     });
+
+     source.on('question', function(question) {
+       if (question === 'favorite food?') return 'wasabi almonds';
+     });
+
+     source.on('question', function(question) {
+       // this listener doesn't return anything, and therefore won't participate
+       // in the poll
+     });
+
+     source.poll('question', 'favorite food?'); // returns ['beer', 'wasabi almonds']
+     ```
+
+     @class Evented
+     @namespace Orbit
+     @extension
+     @constructor
+     */
     var Evented = {
+      /**
+       Mixes the `Evented` interface into an object
+
+       @method extend
+       @param {Object} object Object to extend
+       @returns {Object} Extended object
+       */
       extend: function(object) {
         assert('Evented requires Orbit.Promise be defined', Orbit.Promise);
 
@@ -820,6 +783,22 @@ define("orbit/evented",
               }
             }
           }, this);
+        },
+
+        one: function(eventName, callback, binding) {
+          var callOnce,
+              notifier;
+
+          binding = binding || this;
+
+          notifier = notifierForEvent(this, eventName, true);
+
+          callOnce = function() {
+            callback.apply(binding, arguments);
+            notifier.removeListener(callOnce, binding);
+          };
+
+          notifier.addListener(callOnce, binding);
         },
 
         emit: function(eventNames) {
@@ -927,66 +906,97 @@ define("orbit/evented",
       }
     };
 
-    __exports__["default"] = Evented;
+    return Evented;
   });
-define("orbit/lib/assert", 
+define("orbit/lib/assert",
   ["exports"],
   function(__exports__) {
     "use strict";
     /**
-     * Throw an exception if `test` is not truthy.
-     *
-     * @mathod assert
-     * @param desc Description of the error thrown
-     * @param test
+     Throw an exception if `test` is not truthy.
+
+     @method assert
+     @for Orbit
+     @param desc Description of the error thrown
+     @param test Value that should be truthy for assertion to pass
      */
     var assert = function(desc, test) {
       if (!test) throw new Error("Assertion failed: " + desc);
     };
 
+
     __exports__.assert = assert;
   });
-define("orbit/lib/config", 
+define("orbit/lib/config",
   ["exports"],
   function(__exports__) {
     "use strict";
     /**
-     * Converts an array of values to an object with those values as properties
-     * having a value of `true`.
-     *
-     * This is useful for converting an array of settings to a more efficiently
-     * accessible settings object.
-     *
-     * For example:
-     *
-     * ``` javascript
-     * Orbit.arrayToOptions(['a', 'b']); // returns {a: true, b: true}
-     * ```
-     *
-     * @method arrayToOptions
-     * @param arr
-     * @returns {Object}
+     Converts an array of values to an object with those values as properties
+     having a value of `true`.
+
+     This is useful for converting an array of settings to a more efficiently
+     accessible settings object.
+
+     @example
+
+     ``` javascript
+     Orbit.arrayToOptions(['a', 'b']); // returns {a: true, b: true}
+     ```
+
+     @method arrayToOptions
+     @for Orbit
+     @param {Array} a
+     @returns {Object} Set of options, keyed by the elements in `a`
      */
-    var arrayToOptions = function(arr) {
+    var arrayToOptions = function(a) {
       var options = {};
-      if (arr) {
-        for (var i in arr) {
-          if (arr.hasOwnProperty(i)) options[arr[i]] = true;
+      if (a) {
+        for (var i in a) {
+          if (a.hasOwnProperty(i)) options[a[i]] = true;
         }
       }
       return options;
     };
 
+
     __exports__.arrayToOptions = arrayToOptions;
   });
-define("orbit/lib/diffs", 
+define("orbit/lib/diffs",
   ["orbit/lib/eq","orbit/lib/objects","orbit/lib/config","exports"],
   function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
     "use strict";
     var eq = __dependency1__.eq;
     var clone = __dependency2__.clone;
+    var isArray = __dependency2__.isArray;
     var arrayToOptions = __dependency3__.arrayToOptions;
 
+    /**
+     Determines the patch operations required to convert one object to another.
+
+     See [RFC 6902](http://tools.ietf.org/html/rfc6902) for a description of patch
+     operations and a full set of examples.
+
+     @example
+
+     ``` javascript
+     var a, b;
+
+     a = {foo: 'bar'};
+     b = {foo: 'bar', 'baz': 'qux'};
+
+     Orbit.diffs(a, b); // [{op: 'add', path: '/baz', value: 'qux'}]
+     ```
+
+     @method diffs
+     @for Orbit
+     @param a
+     @param b
+     @param {Object} [options]
+     @param {Array}  [options.ignore] Properties to ignore
+     @param {String} [options.basePath] A base path to be prefixed to all paths in return patch operations
+     @returns {Array} Array of patch operations to get from `a` to `b` (or undefined if they are equal)
+     */
     var diffs = function(a, b, options) {
       if (a === b) {
         return undefined;
@@ -997,7 +1007,7 @@ define("orbit/lib/diffs",
         var ignore = arrayToOptions(options.ignore),
             basePath = options.basePath || '';
 
-        if (Object.prototype.toString.call(basePath) === '[object Array]') {
+        if (isArray(basePath)) {
           basePath = basePath.join('/');
         }
 
@@ -1007,7 +1017,7 @@ define("orbit/lib/diffs",
             var i,
                 d;
 
-            if (type === '[object Array]') {
+            if (isArray(a)) {
               var aLength = a.length,
                   bLength = b.length,
                   maxLength = bLength > aLength ? bLength : aLength,
@@ -1088,10 +1098,25 @@ define("orbit/lib/diffs",
 
     __exports__.diffs = diffs;
   });
-define("orbit/lib/eq", 
+define("orbit/lib/eq",
   ["exports"],
   function(__exports__) {
     "use strict";
+    /**
+     `eq` checks the equality of two objects.
+
+     The properties belonging to objects (but not their prototypes) will be
+     traversed deeply and compared.
+
+     Includes special handling for strings, numbers, dates, booleans, regexes, and
+     arrays.
+
+     @method eq
+     @for Orbit
+     @param a
+     @param b
+     @returns {Boolean} are `a` and `b` equal?
+     */
     var eq = function(a, b) {
       // Some elements of this function come from underscore
       // (c) 2009-2013 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -1149,10 +1174,18 @@ define("orbit/lib/eq",
 
     __exports__.eq = eq;
   });
-define("orbit/lib/exceptions", 
+define("orbit/lib/exceptions",
   ["exports"],
   function(__exports__) {
     "use strict";
+    /**
+     Exception thrown when a path in a document can not be found.
+
+     @class PathNotFoundException
+     @namespace Orbit
+     @param {String} path
+     @constructor
+     */
     var PathNotFoundException = function(path) {
       this.path = path;
     };
@@ -1163,12 +1196,22 @@ define("orbit/lib/exceptions",
 
     __exports__.PathNotFoundException = PathNotFoundException;
   });
-define("orbit/lib/objects", 
+define("orbit/lib/objects",
   ["orbit/lib/eq","exports"],
   function(__dependency1__, __exports__) {
     "use strict";
     var eq = __dependency1__.eq;
 
+    /**
+     Creates a deeply nested clone of an object.
+
+     Traverses all object properties (but not prototype properties).
+
+     @method clone
+     @for Orbit
+     @param {Object} obj
+     @returns {Object} Clone of the original object
+     */
     var clone = function(obj) {
       if (obj === undefined || obj === null || typeof obj !== 'object') return obj;
 
@@ -1206,14 +1249,15 @@ define("orbit/lib/objects",
     };
 
     /**
-     * Expose properties and methods from one object on another.
-     *
-     * Methods will be called on `source` and will maintain `source` as the
-     * context.
-     *
-     * @method expose
-     * @param destination
-     * @param source
+     Expose properties and methods from one object on another.
+
+     Methods will be called on `source` and will maintain `source` as the
+     context.
+
+     @method expose
+     @for Orbit
+     @param {Object} destination
+     @param {Object} source
      */
     var expose = function(destination, source) {
       var properties;
@@ -1235,11 +1279,12 @@ define("orbit/lib/objects",
     };
 
     /**
-     * Extend an object with the properties of one or more other objects
-     *
-     * @method extend
-     * @param destination The object to merge into
-     * @param source One or more source objects
+     Extend an object with the properties of one or more other objects
+
+     @method extend
+     @for Orbit
+     @param {Object} destination The object to merge into
+     @param {Object} source One or more source objects
      */
     var extend = function(destination) {
       var sources = Array.prototype.slice.call(arguments, 1);
@@ -1252,21 +1297,49 @@ define("orbit/lib/objects",
       });
     };
 
+    /**
+     Checks whether an object is an instance of an `Array`
+
+     @method isArray
+     @for Orbit
+     @param {Object} obj
+     @returns {boolean}
+     */
+    var isArray = function(obj) {
+      return Object.prototype.toString.call(obj) === '[object Array]';
+    };
+
+    /**
+     Checks whether an object is null or undefined
+
+     @method isArray
+     @for Orbit
+     @param {Object} obj
+     @returns {boolean}
+     */
+    var isNone = function(obj) {
+      return obj === undefined || obj === null;
+    };
+
     __exports__.clone = clone;
+    __exports__.eq = eq;
     __exports__.expose = expose;
     __exports__.extend = extend;
+    __exports__.isArray = isArray;
+    __exports__.isNone = isNone;
   });
-define("orbit/lib/strings", 
+define("orbit/lib/strings",
   ["exports"],
   function(__exports__) {
     "use strict";
     /**
-     * Uppercase the first letter of a string. The remainder of the string won't
-     * be affected.
-     *
-     * @method capitalize
-     * @param {String} str
-     * @returns {String}
+     Uppercase the first letter of a string. The remainder of the string won't
+     be affected.
+
+     @method capitalize
+     @for Orbit
+     @param {String} str
+     @returns {String} capitalized string
      */
     var capitalize = function(str) {
       return str.charAt(0).toUpperCase() + str.slice(1);
@@ -1274,39 +1347,42 @@ define("orbit/lib/strings",
 
     __exports__.capitalize = capitalize;
   });
-define("orbit/lib/stubs", 
+define("orbit/lib/stubs",
   ["exports"],
   function(__exports__) {
     "use strict";
     /**
-     * Empty method that does nothing.
-     *
-     * Use as a placeholder for non-required static methods.
-     *
-     * @method noop
+     Empty method that does nothing.
+
+     Use as a placeholder for non-required static methods.
+
+     @method noop
+     @for Orbit
      */
     var noop = function() {};
 
     /**
-     * Empty method that should be overridden. Otherwise, it will throw an Error.
-     *
-     * Use as a placeholder for required static methods.
-     *
-     * @method required
+     Empty method that should be overridden. Otherwise, it will throw an Error.
+
+     Use as a placeholder for required static methods.
+
+     @method required
+     @for Orbit
      */
     var required = function() { throw new Error("Missing implementation"); };
 
     __exports__.noop = noop;
     __exports__.required = required;
   });
-define("orbit/main", 
-  ["exports"],
-  function(__exports__) {
+define("orbit/main",
+  [],
+  function() {
     "use strict";
     /**
-     * Orbit
-     *
-     * @module orbit
+     Contains core methods and classes for Orbit.js
+
+     @module orbit
+     @main orbit
      */
 
     // Prototype extensions
@@ -1322,19 +1398,60 @@ define("orbit/main",
     }
 
     /**
-     * Namespace for core Orbit methods and classes.
-     *
-     * @class Orbit
-     * @static
+     Namespace for core Orbit methods and classes.
+
+     @class Orbit
+     @static
      */
     var Orbit = {};
 
-    __exports__["default"] = Orbit;
+
+    return Orbit;
   });
-define("orbit/notifier", 
-  ["exports"],
-  function(__exports__) {
+define("orbit/notifier",
+  [],
+  function() {
     "use strict";
+    /**
+     The `Notifier` class can emit messages to an array of subscribed listeners.
+     Here's a simple example:
+
+     ```javascript
+     var notifier = new Orbit.Notifier();
+     notifier.addListener(function(message) {
+       console.log("I heard " + message);
+     });
+     notifier.addListener(function(message) {
+       console.log("I also heard " + message);
+     });
+
+     notifier.emit('hello'); // logs "I heard hello" and "I also heard hello"
+     ```
+
+     Notifiers can also poll listeners with an event and return their responses:
+
+     ```javascript
+     var dailyQuestion = new Orbit.Notifier();
+     dailyQuestion.addListener(function(question) {
+       if (question === 'favorite food?') return 'beer';
+     });
+     dailyQuestion.addListener(function(question) {
+       if (question === 'favorite food?') return 'wasabi almonds';
+     });
+     dailyQuestion.addListener(function(question) {
+       // this listener doesn't return anything, and therefore won't participate
+       // in the poll
+     });
+
+     dailyQuestion.poll('favorite food?'); // returns ['beer', 'wasabi almonds']
+     ```
+
+     Calls to `emit` and `poll` will send along all of their arguments.
+
+     @class Notifier
+     @namespace Orbit
+     @constructor
+     */
     var Notifier = function() {
       this.init.apply(this, arguments);
     };
@@ -1344,11 +1461,26 @@ define("orbit/notifier",
         this.listeners = [];
       },
 
+      /**
+       Add a callback as a listener, which will be triggered when sending
+       notifications.
+
+       @method addListener
+       @param {Function} callback Function to call as a notification
+       @param {Object} binding Context in which to call `callback`
+       */
       addListener: function(callback, binding) {
         binding = binding || this;
         this.listeners.push([callback, binding]);
       },
 
+      /**
+       Remove a listener so that it will no longer receive notifications.
+
+       @method removeListener
+       @param {Function} callback Function registered as a callback
+       @param {Object} binding Context in which `callback` was registered
+       */
       removeListener: function(callback, binding) {
         var listeners = this.listeners,
             listener;
@@ -1363,44 +1495,159 @@ define("orbit/notifier",
         }
       },
 
-      emit: function() {
-        var listeners = this.listeners,
-            listener;
+      /**
+       Notify registered listeners.
 
-        for (var i = 0, len = listeners.length; i < len; i++) {
-          listener = listeners[i];
-          if (listener) {
-            listener[0].apply(listener[1], arguments);
-          }
-        }
+       Any responses from listeners will be ignored.
+
+       @method emit
+       @param {*} Any number of parameters to be sent to listeners
+       */
+      emit: function() {
+        var args = arguments;
+        this.listeners.slice(0).forEach(function(listener) {
+          listener[0].apply(listener[1], args);
+        });
       },
 
+      /**
+       Poll registered listeners.
+
+       Any responses from listeners will be returned in an array.
+
+       @method poll
+       @param {*} Any number of parameters to be sent to listeners
+       @returns {Array} Array of responses
+       */
       poll: function() {
-        var listeners = this.listeners,
-            listener,
+        var args = arguments,
             allResponses = [],
             response;
 
-        for (var i = 0, len = listeners.length; i < len; i++) {
-          listener = listeners[i];
-          if (listener) {
-            response = listener[0].apply(listener[1], arguments);
-            if (response !== undefined) { allResponses.push(response); }
-          }
-        }
+        this.listeners.slice(0).forEach(function(listener) {
+          response = listener[0].apply(listener[1], args);
+          if (response !== undefined) { allResponses.push(response); }
+        });
 
         return allResponses;
       }
     };
 
-    __exports__["default"] = Notifier;
+    return Notifier;
   });
-define("orbit/requestable", 
-  ["orbit/evented","orbit/lib/assert","orbit/lib/strings","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
+define("orbit/request_connector",
+  ["orbit/lib/assert","orbit/lib/config","orbit/lib/strings","orbit/requestable"],
+  function(__dependency1__, __dependency2__, __dependency3__, Requestable) {
     "use strict";
-    var Evented = __dependency1__["default"];
-    var assert = __dependency2__.assert;
+    var assert = __dependency1__.assert;
+    var arrayToOptions = __dependency2__.arrayToOptions;
+    var capitalize = __dependency3__.capitalize;
+
+    /**
+     A `RequestConnector` observes requests made to a primary source and allows a
+     secondary source to either "assist" or "rescue" those requests.
+
+     A `RequestConnector` can operate in one of two modes:
+
+     - In the default `"rescue"` mode, the secondary source will only be called upon
+     to fulfill a request if the primary source fails to do so.
+
+     - In `"assist"` mode, the secondary source will be called upon to fulfill a
+     request before the primary source. Only if the secondary source fails to
+     fulfill the request will the primary source be called upon to do so.
+
+     Unlike a `TransformConnector`, a `RequestConnector` always blocks
+     asynchronous requests before proceeding. In other words, any promises that
+     are returned from requests will be settled (either succeeding or failing)
+     before the connector proceeds.
+
+     @class RequestConnector
+     @namespace Orbit
+     @param {Object}  primarySource
+     @param {Object}  secondarySource
+     @param {Object}  [options]
+     @param {String}  [options.mode="rescue"] Mode of operation: `"rescue"` or `"assist"`
+     @param {Boolean} [options.active=true] Is the connector is actively observing the `primarySource`?
+     @constructor
+     */
+    var RequestConnector = function(primarySource, secondarySource, options) {
+      var _this = this;
+
+      this.primarySource = primarySource;
+      this.secondarySource = secondarySource;
+
+      options = options || {};
+
+      this.actions = options.actions || Requestable.defaultActions;
+      if (options.types) this.types = arrayToOptions(options.types);
+
+      this.mode = options.mode !== undefined ? options.mode : 'rescue';
+      assert("`mode` must be 'assist' or 'rescue'", this.mode === 'assist' ||
+                                                    this.mode === 'rescue');
+
+      var active = options.active !== undefined ? options.active : true;
+      if (active) this.activate();
+    };
+
+    RequestConnector.prototype = {
+      constructor: RequestConnector,
+
+      activate: function() {
+        var _this = this,
+            handler;
+
+        if (this._active) return;
+
+        this.handlers = {};
+
+        this.actions.forEach(function(action) {
+          if (_this.types) {
+            handler = function(type) {
+              if (_this.types[type]) {
+                return _this.secondarySource[action].apply(_this.secondarySource, arguments);
+              }
+            };
+          } else {
+            handler = _this.secondarySource[action];
+          }
+
+          _this.primarySource.on(_this.mode + capitalize(action),
+            handler,
+            _this.secondarySource
+          );
+
+          _this.handlers[action] = handler;
+        });
+
+        this._active = true;
+      },
+
+      deactivate: function() {
+        var _this = this;
+
+        this.actions.forEach(function(action) {
+          this.primarySource.off(_this.mode + capitalize(action),
+            _this.handlers[action],
+            _this.secondarySource
+          );
+        });
+
+        this._active = false;
+      },
+
+      isActive: function() {
+        return this._active;
+      }
+    };
+
+    return RequestConnector;
+  });
+define("orbit/requestable",
+  ["orbit/lib/assert","orbit/lib/objects","orbit/lib/strings","orbit/evented"],
+  function(__dependency1__, __dependency2__, __dependency3__, Evented) {
+    "use strict";
+    var assert = __dependency1__.assert;
+    var isArray = __dependency2__.isArray;
     var capitalize = __dependency3__.capitalize;
 
     var Requestable = {
@@ -1416,7 +1663,7 @@ define("orbit/requestable",
       },
 
       defineAction: function(object, action) {
-        if (Object.prototype.toString.call(action) === "[object Array]") {
+        if (isArray(action)) {
           action.forEach(function(name) {
             this.defineAction(object, name);
           }, this);
@@ -1428,15 +1675,15 @@ define("orbit/requestable",
                 Action = capitalize(action);
 
             return object.resolve.apply(object, ['assist' + Action].concat(args)).then(
-              null,
+              undefined,
               function() {
                 return object['_' + action].apply(object, args);
               }
             ).then(
-              null,
+              undefined,
               function(error) {
                 return object.resolve.apply(object, ['rescue' + Action].concat(args)).then(
-                  null,
+                  undefined,
                   function() {
                     throw error;
                   }
@@ -1463,11 +1710,11 @@ define("orbit/requestable",
       }
     };
 
-    __exports__["default"] = Requestable;
+    return Requestable;
   });
-define("orbit/transaction", 
-  ["exports"],
-  function(__exports__) {
+define("orbit/transaction",
+  [],
+  function() {
     "use strict";
     var Transaction = function() {
       this.init.apply(this, arguments);
@@ -1519,16 +1766,164 @@ define("orbit/transaction",
       }
     };
 
-    __exports__["default"] = Transaction;
+    return Transaction;
   });
-define("orbit/transformable", 
-  ["orbit/main","orbit/evented","orbit/action_queue","orbit/lib/assert","exports"],
-  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {
+define("orbit/transform_connector",
+  ["orbit/lib/objects","orbit/lib/diffs","orbit/lib/eq","orbit/lib/config","orbit/action_queue"],
+  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, ActionQueue) {
     "use strict";
-    var Orbit = __dependency1__["default"];
-    var Evented = __dependency2__["default"];
-    var ActionQueue = __dependency3__["default"];
-    var assert = __dependency4__.assert;
+    var clone = __dependency1__.clone;
+    var diffs = __dependency2__.diffs;
+    var eq = __dependency3__.eq;
+    var arrayToOptions = __dependency4__.arrayToOptions;
+
+    /**
+     A `TransformConnector` observes a source's transforms and applies them to a
+     target.
+
+     Each connector is "one way", so bi-directional synchronization between sources
+     requires the creation of two connectors.
+
+     A `TransformConnector` can operate in one of two modes:
+
+     - In the default "blocking" mode, a connector will return a promise to the
+     `didTransform` event, which will prevent the original transform from resolving
+     until the promise itself has resolved.
+
+     - In "non-blocking" mode, transforms do not block the resolution of the original
+     transform - asynchronous actions are performed afterward.
+
+     If the target of a connector is busy processing transformations, then the
+     connector will queue operations until the target is free. This ensures that the
+     target's state is as up to date as possible before transformations proceed.
+
+     The connector's `transform` method actually applies transforms to its target.
+     This method attempts to retrieve the current value at the path of the
+     transformation and resolves any conflicts with the connector's
+     `resolveConflicts` method. By default, a simple differential is applied to the
+     target, although both `transform` and `resolveConflicts` can be overridden to
+     apply an alternative differencing algorithm.
+
+     @class TransformConnector
+     @namespace Orbit
+     @param {Object}  source
+     @param {Object}  target
+     @param {Object}  [options]
+     @param {String}  [options.blocking=true] Does the connector wait for promises to be settled?
+     @param {Boolean} [options.active=true] Is the connector is actively observing the `source`?
+     @constructor
+     */
+    var TransformConnector = function(source, target, options) {
+      this.source = source;
+      this.target = target;
+      this.transformQueue = new ActionQueue(this.transform, this, {autoProcess: false});
+
+      options = options || {};
+    // TODO - allow filtering of transforms
+    //  if (options.actions) this.actions = arrayToOptions(options.actions);
+    //  if (options.types) this.types = arrayToOptions(options.types);
+      this.blocking = options.blocking !== undefined ? options.blocking : true;
+      var active = options.active !== undefined ? options.active : true;
+
+      if (active) this.activate();
+    };
+
+    TransformConnector.prototype = {
+      constructor: TransformConnector,
+
+      activate: function() {
+        var _this = this;
+
+        if (this._active) return;
+
+        this.source.on('didTransform',  this._processTransform,  this);
+        this.target.transformQueue.on('didComplete', this.transformQueue.process, this.transformQueue);
+
+        this._active = true;
+      },
+
+      deactivate: function() {
+        this.source.off('didTransform',  this._processTransform,  this);
+        this.target.transformQueue.off('didComplete', this.transformQueue.process, this.transformQueue);
+
+        this._active = false;
+      },
+
+      isActive: function() {
+        return this._active;
+      },
+
+      transform: function(operation) {
+        //TODO-log  console.log('****', ' transform from ', this.source.id, ' to ', this.target.id, operation);
+
+        if (this.target.retrieve) {
+          var currentValue = this.target.retrieve(operation.path);
+
+          if (currentValue) {
+            if (operation.op === 'add' || operation.op === 'replace') {
+              if (eq(currentValue, operation.value)) {
+                //TODO-log  console.log('==', ' transform from ', this.source.id, ' to ', this.target.id, operation);
+                return;
+              } else {
+                return this.resolveConflicts(operation.path, currentValue, operation.value);
+              }
+            }
+          } else if (operation.op === 'remove') {
+            return;
+          }
+        }
+
+        return this.target.transform(operation);
+      },
+
+      resolveConflicts: function(path, currentValue, updatedValue) {
+        var ops = diffs(currentValue, updatedValue, {basePath: path});
+
+        //TODO-log  console.log(this.target.id, 'resolveConflicts', path, currentValue, updatedValue, ops);
+
+        return this.target.transform(ops);
+      },
+
+      /////////////////////////////////////////////////////////////////////////////
+      // Internals
+      /////////////////////////////////////////////////////////////////////////////
+
+      _processTransform: function(operation) {
+    // TODO - add filtering back in
+    //    if (this.actions && !this.actions[action]) return;
+    //    if (this.types && !this.types[type]) return;
+
+    //    console.log(this.target.id, 'processTransform', operation);
+        if (this.blocking) {
+          return this._applyOrQueueTransform(operation);
+
+        } else {
+          this._applyOrQueueTransform(operation);
+        }
+      },
+
+      _applyOrQueueTransform: function(operation) {
+        // If the target's transformQueue is processing, then we should queue up the
+        // transform on the connector instead of on the target.
+        // This ensures that comparisons are made against the target's most up to
+        // date state. Note that this connector's queue processing is triggered
+        // by the `didComplete` event for the target's queue.
+        if (this.target.transformQueue.processing) {
+          return this.transformQueue.push(operation);
+        }
+
+        return this.transform(operation);
+      }
+    };
+
+    return TransformConnector;
+  });
+define("orbit/transformable",
+  ["orbit/lib/assert","orbit/lib/objects","orbit/main","orbit/evented","orbit/action_queue"],
+  function(__dependency1__, __dependency2__, Orbit, Evented, ActionQueue) {
+    "use strict";
+    var assert = __dependency1__.assert;
+    var isArray = __dependency2__.isArray;
 
     var normalizeOperation = function(op) {
       if (typeof op.path === 'string') op.path = op.path.split('/');
@@ -1628,10 +2023,14 @@ define("orbit/transformable",
             object._completedTransforms.push([operation, inverse]);
           };
 
+          object.settleTransforms = function() {
+            return settleTransformEvents.call(object, object._completedTransforms);
+          };
+
           object.transform = function(operation) {
             assert('_transform must be defined', object._transform);
 
-            if (Object.prototype.toString.call(operation) === '[object Array]') {
+            if (isArray(operation)) {
               return transformMany.call(object, operation);
             } else {
               return transformOne.call(object, operation);
@@ -1642,5 +2041,5 @@ define("orbit/transformable",
       }
     };
 
-    __exports__["default"] = Transformable;
+    return Transformable;
   });

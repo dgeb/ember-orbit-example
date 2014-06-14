@@ -12,7 +12,7 @@ export default Ember.Object.extend({
 
     var _this = this;
 
-    var schema = {
+    var schema = new OC.Schema({
       idField: 'id',
       models: {
         planet: {
@@ -21,7 +21,7 @@ export default Ember.Object.extend({
           }
         }
       }
-    };
+    });
 
     var orbitStore = new OC.LocalStorageSource(schema, {
       namespace: this.get('name')

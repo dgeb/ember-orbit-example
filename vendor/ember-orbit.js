@@ -1,14 +1,13 @@
 define("ember_orbit",
-  ["ember_orbit/main","ember_orbit/context","ember_orbit/model","ember_orbit/record_array_manager","ember_orbit/schema","ember_orbit/source","ember_orbit/store","ember_orbit/attr","ember_orbit/links/has_many_array","ember_orbit/links/has_one_object","ember_orbit/links/link_proxy_mixin","ember_orbit/record_arrays/filtered_record_array","ember_orbit/record_arrays/record_array","ember_orbit/relationships/has_many","ember_orbit/relationships/has_one"],
-  function(EO, Context, Model, RecordArrayManager, Schema, Source, Store, attr, HasManyArray, HasOneObject, LinkProxyMixin, FilteredRecordArray, RecordArray, hasMany, hasOne) {
+  ["ember_orbit/main","ember_orbit/store","ember_orbit/model","ember_orbit/record_array_manager","ember_orbit/schema","ember_orbit/source","ember_orbit/attr","ember_orbit/links/has_many_array","ember_orbit/links/has_one_object","ember_orbit/links/link_proxy_mixin","ember_orbit/record_arrays/filtered_record_array","ember_orbit/record_arrays/record_array","ember_orbit/relationships/has_many","ember_orbit/relationships/has_one"],
+  function(EO, Store, Model, RecordArrayManager, Schema, Source, attr, HasManyArray, HasOneObject, LinkProxyMixin, FilteredRecordArray, RecordArray, hasMany, hasOne) {
     "use strict";
 
-    EO.Context = Context;
+    EO.Store = Store;
     EO.Model = Model;
     EO.RecordArrayManager = RecordArrayManager;
     EO.Schema = Schema;
     EO.Source = Source;
-    EO.Store = Store;
     EO.attr = attr;
     EO.HasManyArray = HasManyArray;
     EO.HasOneObject = HasOneObject;
@@ -53,327 +52,6 @@ define("ember_orbit/attr",
 
     return attr;
   });
-define("ember_orbit/context",
-  ["ember_orbit/store","ember_orbit/source","ember_orbit/model","ember_orbit/record_array_manager","orbit_common/memory_source"],
-  function(Store, Source, Model, RecordArrayManager, OCMemorySource) {
-    "use strict";
-
-    var get = Ember.get,
-        set = Ember.set;
-
-    var Promise = Ember.RSVP.Promise;
-
-    var PromiseArray = Ember.ArrayProxy.extend(Ember.PromiseProxyMixin);
-    function promiseArray(promise, label) {
-      return PromiseArray.create({
-        promise: Promise.cast(promise, label)
-      });
-    }
-
-    var Context = Source.extend({
-      store: null,
-      SourceClass: OCMemorySource,
-
-      schema: null,
-      idField: Ember.computed.alias('schema.idField'),
-
-      init: function() {
-        var store = get(this, 'store');
-        Ember.assert("`Context.store` must be initialized with an instance of a `Store`", store);
-
-        var schema = get(store, 'schema');
-        set(this, 'schema', schema);
-
-        this.typeMaps = {};
-
-        this._super.apply(this, arguments);
-
-        this._source.on('didTransform', this._didTransform, this);
-
-        this._requests = Ember.OrderedSet.create();
-
-        this._recordArrayManager = RecordArrayManager.create({
-          context: this
-        });
-      },
-
-      then: function(success, failure) {
-        return Ember.RSVP.all(this._requests.toArray()).then(success, failure);
-      },
-
-      willDestroy: function() {
-        this._source.off('didTransform', this.didTransform, this);
-        this._recordArrayManager.destroy();
-        this._super.apply(this, arguments);
-      },
-
-      typeMapFor: function(type) {
-        var typeMap = this.typeMaps[type];
-
-        if (typeMap) return typeMap;
-
-        typeMap = {
-          records: {},
-          type: type
-        };
-
-        this.typeMaps[type] = typeMap;
-
-        return typeMap;
-      },
-
-      transform: function(operation) {
-        return this._source.transform(operation);
-      },
-
-      all: function(type) {
-        this._verifyType(type);
-
-        var typeMap = this.typeMapFor(type),
-            findAllCache = typeMap.findAllCache;
-
-        if (findAllCache) { return findAllCache; }
-
-        var array = this._recordArrayManager.createRecordArray(type);
-
-        typeMap.findAllCache = array;
-        return array;
-      },
-
-      filter: function(type, query, filter) {
-        this._verifyType(type);
-
-        var length = arguments.length;
-        var hasQuery = length === 3;
-        var promise;
-        var array;
-
-        if (hasQuery) {
-          promise = this.find(type, query);
-        } else if (length === 2) {
-          filter = query;
-        }
-
-        if (hasQuery) {
-          array = this._recordArrayManager.createFilteredRecordArray(type, filter, query);
-        } else {
-          array = this._recordArrayManager.createFilteredRecordArray(type, filter);
-        }
-
-        promise = promise || Promise.cast(array);
-
-        return promiseArray(promise.then(function() {
-          return array;
-        }, null, "OE: Context#filter of " + type));
-      },
-
-      find: function(type, id) {
-        var _this = this;
-        this._verifyType(type);
-
-        var promise = this._source.find(type, id).then(function(data) {
-          return _this._lookupFromData(type, data);
-        });
-
-        return this._request(promise);
-      },
-
-      add: function(type, properties) {
-        var _this = this;
-        this._verifyType(type);
-
-        // TODO: normalize properties
-        var promise = this._source.add(type, properties).then(function(data) {
-          return _this._lookupFromData(type, data);
-        });
-
-        return this._request(promise);
-      },
-
-      remove: function(type, id) {
-        this._verifyType(type);
-
-        var promise = this._source.remove(type, id);
-
-        return this._request(promise);
-      },
-
-      patch: function(type, id, key, value) {
-        this._verifyType(type);
-
-        var promise = this._source.patch(type, id, key, value);
-
-        return this._request(promise);
-      },
-
-      addLink: function(type, id, key, relatedId) {
-        this._verifyType(type);
-
-        var promise = this._source.addLink(type, id, key, relatedId);
-
-        return this._request(promise);
-      },
-
-      removeLink: function(type, id, key, relatedId) {
-        this._verifyType(type);
-
-        var promise = this._source.removeLink(type, id, key, relatedId);
-
-        return this._request(promise);
-      },
-
-      findLink: function(type, id, key) {
-        var _this = this;
-        this._verifyType(type);
-
-        var linkType = get(this, 'schema').linkProperties(type, key).model;
-
-        var promise = this._source.findLink(type, id, key).then(function(data) {
-          return _this._lookupFromData(linkType, data);
-        });
-
-        return this._request(promise);
-      },
-
-      retrieve: function(type, id) {
-        this._verifyType(type);
-
-        var ids;
-        if (arguments.length === 1) {
-          ids = Object.keys(this._source.retrieve([type]));
-
-        } else if (Ember.isArray(id)) {
-          ids = id;
-        }
-
-        if (ids) {
-          return this._lookupRecords(type, ids);
-
-        } else {
-          if (typeof id === 'object') {
-            var idField = get(this, 'idField');
-            id = get(id, idField);
-          }
-          if (this._source.retrieve([type, id])) {
-            return this._lookupRecord(type, id);
-          }
-        }
-      },
-
-      retrieveAttribute: function(type, id, key) {
-        this._verifyType(type);
-
-        return this._source.retrieve([type, id, key]);
-      },
-
-      retrieveLink: function(type, id, key) {
-        this._verifyType(type);
-
-        var linkType = get(this, 'schema').linkProperties(type, key).model;
-
-        var relatedId = this._source.retrieve([type, id, '__rel', key]);
-
-        if (linkType && relatedId) {
-          return this.retrieve(linkType, relatedId);
-        }
-      },
-
-      retrieveLinks: function(type, id, key) {
-        this._verifyType(type);
-
-        var linkType = get(this, 'schema').linkProperties(type, key).model;
-
-        var relatedIds = Object.keys(this._source.retrieve([type, id, '__rel', key]));
-
-        if (linkType && Ember.isArray(relatedIds) && relatedIds.length > 0) {
-          return this.retrieve(linkType, relatedIds);
-        }
-      },
-
-      unload: function(type, id) {
-        this._verifyType(type);
-
-        var typeMap = this.typeMapFor(type);
-        delete typeMap.records[id];
-      },
-
-      _verifyType: function(type) {
-        Ember.assert("`type` must be registered as a model in the container", get(this, 'schema').modelFor(type));
-      },
-
-      _didTransform: function(operation, inverse) {
-        console.log('_didTransform', operation, inverse);
-
-        var op = operation.op,
-            path = operation.path,
-            value = operation.value,
-            record = this._lookupRecord(path[0], path[1]);
-
-        if (path.length === 3) {
-          // attribute changed
-          record.propertyDidChange(path[2]);
-
-        } else if (path.length === 4) {
-          // hasOne link changed
-          var key = path[3];
-          var link = this.retrieveLink(path[0], path[1], key);
-          record.set(key, link);
-        }
-
-        // trigger record array changes
-        this._recordArrayManager.recordDidChange(record, operation);
-      },
-
-      _lookupRecord: function(type, id) {
-        var typeMap = this.typeMapFor(type),
-            record = typeMap.records[id];
-
-        if (record === undefined) {
-          var model = get(this, 'schema').modelFor(type);
-
-          var data = {
-            context: this
-          };
-          data[get(this, 'idField')] = id;
-
-          record = model._create(data);
-
-          typeMap.records[id] = record;
-        }
-
-        return record;
-      },
-
-      _lookupRecords: function(type, ids) {
-        var _this = this;
-        return ids.map(function(id) {
-          return _this._lookupRecord(type, id);
-        });
-      },
-
-      _lookupFromData: function(type, data) {
-        var idField = get(this, 'idField');
-        if (Ember.isArray(data)) {
-          var ids = data.map(function(recordData) {
-            return recordData[idField];
-          });
-          return this._lookupRecords(type, ids);
-        } else {
-          return this._lookupRecord(type, data[idField]);
-        }
-      },
-
-      _request: function(promise) {
-        var requests = this._requests;
-        requests.add(promise);
-        return promise.finally(function() {
-          requests.remove(promise);
-        });
-      }
-    });
-
-    return Context;
-  });
 define("ember_orbit/links/has_many_array",
   ["ember_orbit/record_arrays/record_array","ember_orbit/links/link_proxy_mixin"],
   function(RecordArray, LinkProxyMixin) {
@@ -399,8 +77,8 @@ define("ember_orbit/links/has_many_array",
     var HasManyArray = RecordArray.extend(LinkProxyMixin, {
 
       arrayContentWillChange: function(index, removed, added) {
-        var context = get(this, 'context');
-        var idField = get(context, 'idField');
+        var store = get(this, 'store');
+        var idField = get(store, 'idField');
         var ownerType = get(this, '_ownerType');
         var ownerId = get(this, '_ownerId');
         var linkKey = get(this, '_linkKey');
@@ -410,7 +88,7 @@ define("ember_orbit/links/has_many_array",
         for (var i = index; i < index + removed; i++) {
           record = content.objectAt(i);
           recordId = get(record, idField);
-          context.removeLink(ownerType, ownerId, linkKey, recordId);
+          store.removeLink(ownerType, ownerId, linkKey, recordId);
         }
 
         return this._super.apply(this, arguments);
@@ -419,8 +97,8 @@ define("ember_orbit/links/has_many_array",
       arrayContentDidChange: function(index, removed, added) {
         this._super.apply(this, arguments);
 
-        var context = get(this, 'context');
-        var idField = get(context, 'idField');
+        var store = get(this, 'store');
+        var idField = get(store, 'idField');
         var ownerType = get(this, '_ownerType');
         var ownerId = get(this, '_ownerId');
         var linkKey = get(this, '_linkKey');
@@ -430,7 +108,7 @@ define("ember_orbit/links/has_many_array",
         for (var i = index; i < index + added; i++) {
           record = content.objectAt(i);
           recordId = get(record, idField);
-          context.addLink(ownerType, ownerId, linkKey, recordId);
+          store.addLink(ownerType, ownerId, linkKey, recordId);
         }
       }
 
@@ -469,7 +147,7 @@ define("ember_orbit/links/link_proxy_mixin",
         set = Ember.set;
 
     var LinkProxyMixin = Ember.Mixin.create({
-      context: null,
+      store: null,
 
       _ownerId: null,
 
@@ -478,8 +156,8 @@ define("ember_orbit/links/link_proxy_mixin",
       _linkKey: null,
 
       find: function() {
-        var context = get(this, 'context');
-        var promise = context.findLink.call(context,
+        var store = get(this, 'store');
+        var promise = store.findLink.call(store,
           get(this, '_ownerType'),
           get(this, '_ownerId'),
           get(this, '_linkKey')
@@ -511,23 +189,23 @@ define("ember_orbit/model",
     */
     var Model = Ember.Object.extend(Ember.Evented, {
       getAttribute: function(key) {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
 
-        return context.retrieveAttribute(type, id, key);
+        return store.retrieveAttribute(type, id, key);
       },
 
       getLink: function(key) {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
 
-        var relatedRecord = context.retrieveLink(type, id, key) || null;
+        var relatedRecord = store.retrieveLink(type, id, key) || null;
 
         var hasOneObject = HasOneObject.create({
           content: relatedRecord,
-          context: context,
+          store: store,
           _ownerId: id,
           _ownerType: type,
           _linkKey: key
@@ -539,15 +217,15 @@ define("ember_orbit/model",
       },
 
       getLinks: function(key) {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
 
-        var relatedRecords = context.retrieveLinks(type, id, key) || Ember.A();
+        var relatedRecords = store.retrieveLinks(type, id, key) || Ember.A();
 
         var hasManyArray = HasManyArray.create({
           content: relatedRecords,
-          context: this.context,
+          store: this.store,
           _ownerId: id,
           _ownerType: type,
           _linkKey: key
@@ -559,47 +237,47 @@ define("ember_orbit/model",
       },
 
       patch: function(key, value) {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
 
-        return context.patch(type, id, key, value);
+        return store.patch(type, id, key, value);
       },
 
       addLink: function(key, relatedRecord) {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
-        var relatedId = get(relatedRecord, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
+        var relatedId = get(relatedRecord, get(store, 'idField'));
 
-        return context.addLink(type, id, key, relatedId);
+        return store.addLink(type, id, key, relatedId);
       },
 
       removeLink: function(key, relatedRecord) {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
-        var relatedId = get(relatedRecord, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
+        var relatedId = get(relatedRecord, get(store, 'idField'));
 
-        return context.removeLink(type, id, key, relatedId);
+        return store.removeLink(type, id, key, relatedId);
       },
 
       remove: function() {
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
 
-        return context.remove(type, id);
+        return store.remove(type, id);
       },
 
       willDestroy: function() {
         this._super();
 
-        var context = get(this, 'context');
+        var store = get(this, 'store');
         var type = this.constructor.typeKey;
-        var id = get(this, get(context, 'idField'));
+        var id = get(this, get(store, 'idField'));
 
-        context.unload(type, id);
+        store.unload(type, id);
       },
 
       _assignLink: function(key, value) {
@@ -612,7 +290,7 @@ define("ember_orbit/model",
       _create: Model.create,
 
       create: function() {
-        throw new Ember.Error("You should not call `create` on a model. Instead, call `context.add` with the attributes you would like to set.");
+        throw new Ember.Error("You should not call `create` on a model. Instead, call `store.add` with the attributes you would like to set.");
       },
 
       attributes: Ember.computed(function() {
@@ -680,7 +358,7 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-       This method is invoked whenever data is changed in the context.
+       This method is invoked whenever data is changed in the store.
 
        It updates all record arrays that a record belongs to.
 
@@ -759,11 +437,11 @@ define("ember_orbit/record_array_manager",
 
       _linkWasAdded: function(record, key, value) {
         var type = record.constructor.typeKey;
-        var context = get(this, 'context');
-        var linkType = get(context, 'schema').linkProperties(type, key).model;
+        var store = get(this, 'store');
+        var linkType = get(store, 'schema').linkProperties(type, key).model;
 
         if (linkType) {
-          var relatedRecord = context.retrieve(linkType, value);
+          var relatedRecord = store.retrieve(linkType, value);
           var links = get(record, key);
 
           if (links && relatedRecord) {
@@ -774,11 +452,11 @@ define("ember_orbit/record_array_manager",
 
       _linkWasRemoved: function(record, key, value) {
         var type = record.constructor.typeKey;
-        var context = get(this, 'context');
-        var linkType = get(context, 'schema').linkProperties(type, key).model;
+        var store = get(this, 'store');
+        var linkType = get(store, 'schema').linkProperties(type, key).model;
 
         if (linkType) {
-          var relatedRecord = context.retrieve(linkType, value);
+          var relatedRecord = store.retrieve(linkType, value);
           var links = get(record, key);
 
           if (links && relatedRecord) {
@@ -825,7 +503,7 @@ define("ember_orbit/record_array_manager",
        @param filter
       */
       updateFilter: function(array, type, filter) {
-        var records = this.context.retrieve(type),
+        var records = this.store.retrieve(type),
             record;
 
         for (var i=0, l=records.length; i<l; i++) {
@@ -848,7 +526,7 @@ define("ember_orbit/record_array_manager",
         var array = RecordArray.create({
           type: type,
           content: Ember.A(),
-          context: this.context
+          store: this.store
         });
 
         this.registerFilteredRecordArray(array, type);
@@ -870,7 +548,7 @@ define("ember_orbit/record_array_manager",
           query: query,
           type: type,
           content: Ember.A(),
-          context: this.context,
+          store: this.store,
           manager: this,
           filterFunction: filter
         });
@@ -1052,12 +730,12 @@ define("ember_orbit/record_arrays/record_array",
       type: null,
 
       /**
-       The context that created this record array.
+       The store that created this record array.
 
-       @property context
-       @type EO.Context
+       @property store
+       @type EO.Store
       */
-      context: null,
+      store: null,
 
       /**
        Adds a record to the `RecordArray`.
@@ -1292,8 +970,11 @@ define("ember_orbit/source",
           SourceClass);
 
         var schema = get(this, 'schema');
-        Ember.assert("A Source must be initialized with a `schema` property",
-          schema);
+        if (!schema) {
+          var container = get(this, 'container');
+          schema = container.lookup('schema:main');
+          set(this, 'schema', schema);
+        }
 
         this._source = new SourceClass(get(schema, '_schema'));
       }
@@ -1303,36 +984,316 @@ define("ember_orbit/source",
     return Source;
   });
 define("ember_orbit/store",
-  ["ember_orbit/context"],
-  function(Context) {
+  ["ember_orbit/source","ember_orbit/model","ember_orbit/record_array_manager","orbit_common/memory_source"],
+  function(Source, Model, RecordArrayManager, OCMemorySource) {
     "use strict";
 
     var get = Ember.get,
         set = Ember.set;
 
-    var Store = Ember.Object.extend({
-      schema: null,
+    var Promise = Ember.RSVP.Promise;
 
-      /**
-       @method init
-       @private
-       */
+    var PromiseArray = Ember.ArrayProxy.extend(Ember.PromiseProxyMixin);
+    function promiseArray(promise, label) {
+      return PromiseArray.create({
+        promise: Promise.cast(promise, label)
+      });
+    }
+
+    var Store = Source.extend({
+      SourceClass: OCMemorySource,
+
+      schema: null,
+      idField: Ember.computed.alias('schema.idField'),
+
       init: function() {
         this._super.apply(this, arguments);
 
-        if (!get(this, 'schema')) {
-          var container = get(this, 'container');
-          set(this, 'schema', container.lookup('schema:main'));
+        this.typeMaps = {};
+
+        this._source.on('didTransform', this._didTransform, this);
+
+        this._requests = Ember.OrderedSet.create();
+
+        this._recordArrayManager = RecordArrayManager.create({
+          store: this
+        });
+      },
+
+      then: function(success, failure) {
+        return Ember.RSVP.all(this._requests.toArray()).then(success, failure);
+      },
+
+      willDestroy: function() {
+        this._source.off('didTransform', this.didTransform, this);
+        this._recordArrayManager.destroy();
+        this._super.apply(this, arguments);
+      },
+
+      typeMapFor: function(type) {
+        var typeMap = this.typeMaps[type];
+
+        if (typeMap) return typeMap;
+
+        typeMap = {
+          records: {},
+          type: type
+        };
+
+        this.typeMaps[type] = typeMap;
+
+        return typeMap;
+      },
+
+      transform: function(operation) {
+        return this._source.transform(operation);
+      },
+
+      all: function(type) {
+        this._verifyType(type);
+
+        var typeMap = this.typeMapFor(type),
+            findAllCache = typeMap.findAllCache;
+
+        if (findAllCache) { return findAllCache; }
+
+        var array = this._recordArrayManager.createRecordArray(type);
+
+        typeMap.findAllCache = array;
+        return array;
+      },
+
+      filter: function(type, query, filter) {
+        this._verifyType(type);
+
+        var length = arguments.length;
+        var hasQuery = length === 3;
+        var promise;
+        var array;
+
+        if (hasQuery) {
+          promise = this.find(type, query);
+        } else if (length === 2) {
+          filter = query;
+        }
+
+        if (hasQuery) {
+          array = this._recordArrayManager.createFilteredRecordArray(type, filter, query);
+        } else {
+          array = this._recordArrayManager.createFilteredRecordArray(type, filter);
+        }
+
+        promise = promise || Promise.cast(array);
+
+        return promiseArray(promise.then(function() {
+          return array;
+        }, null, "OE: Store#filter of " + type));
+      },
+
+      find: function(type, id) {
+        var _this = this;
+        this._verifyType(type);
+
+        var promise = this._source.find(type, id).then(function(data) {
+          return _this._lookupFromData(type, data);
+        });
+
+        return this._request(promise);
+      },
+
+      add: function(type, properties) {
+        var _this = this;
+        this._verifyType(type);
+
+        // TODO: normalize properties
+        var promise = this._source.add(type, properties).then(function(data) {
+          return _this._lookupFromData(type, data);
+        });
+
+        return this._request(promise);
+      },
+
+      remove: function(type, id) {
+        this._verifyType(type);
+
+        var promise = this._source.remove(type, id);
+
+        return this._request(promise);
+      },
+
+      patch: function(type, id, key, value) {
+        this._verifyType(type);
+
+        var promise = this._source.patch(type, id, key, value);
+
+        return this._request(promise);
+      },
+
+      addLink: function(type, id, key, relatedId) {
+        this._verifyType(type);
+
+        var promise = this._source.addLink(type, id, key, relatedId);
+
+        return this._request(promise);
+      },
+
+      removeLink: function(type, id, key, relatedId) {
+        this._verifyType(type);
+
+        var promise = this._source.removeLink(type, id, key, relatedId);
+
+        return this._request(promise);
+      },
+
+      findLink: function(type, id, key) {
+        var _this = this;
+        this._verifyType(type);
+
+        var linkType = get(this, 'schema').linkProperties(type, key).model;
+
+        var promise = this._source.findLink(type, id, key).then(function(data) {
+          return _this._lookupFromData(linkType, data);
+        });
+
+        return this._request(promise);
+      },
+
+      retrieve: function(type, id) {
+        this._verifyType(type);
+
+        var ids;
+        if (arguments.length === 1) {
+          ids = Object.keys(this._source.retrieve([type]));
+
+        } else if (Ember.isArray(id)) {
+          ids = id;
+        }
+
+        if (ids) {
+          return this._lookupRecords(type, ids);
+
+        } else {
+          if (typeof id === 'object') {
+            var idField = get(this, 'idField');
+            id = get(id, idField);
+          }
+          if (this._source.retrieve([type, id])) {
+            return this._lookupRecord(type, id);
+          }
         }
       },
 
-      createContext: function() {
-        return Context.create({
-          store: this
+      retrieveAttribute: function(type, id, key) {
+        this._verifyType(type);
+
+        return this._source.retrieve([type, id, key]);
+      },
+
+      retrieveLink: function(type, id, key) {
+        this._verifyType(type);
+
+        var linkType = get(this, 'schema').linkProperties(type, key).model;
+
+        var relatedId = this._source.retrieve([type, id, '__rel', key]);
+
+        if (linkType && relatedId) {
+          return this.retrieve(linkType, relatedId);
+        }
+      },
+
+      retrieveLinks: function(type, id, key) {
+        this._verifyType(type);
+
+        var linkType = get(this, 'schema').linkProperties(type, key).model;
+
+        var relatedIds = Object.keys(this._source.retrieve([type, id, '__rel', key]));
+
+        if (linkType && Ember.isArray(relatedIds) && relatedIds.length > 0) {
+          return this.retrieve(linkType, relatedIds);
+        }
+      },
+
+      unload: function(type, id) {
+        this._verifyType(type);
+
+        var typeMap = this.typeMapFor(type);
+        delete typeMap.records[id];
+      },
+
+      _verifyType: function(type) {
+        Ember.assert("`type` must be registered as a model in the container", get(this, 'schema').modelFor(type));
+      },
+
+      _didTransform: function(operation, inverse) {
+        console.log('_didTransform', operation, inverse);
+
+        var op = operation.op,
+            path = operation.path,
+            value = operation.value,
+            record = this._lookupRecord(path[0], path[1]);
+
+        if (path.length === 3) {
+          // attribute changed
+          record.propertyDidChange(path[2]);
+
+        } else if (path.length === 4) {
+          // hasOne link changed
+          var key = path[3];
+          var link = this.retrieveLink(path[0], path[1], key);
+          record.set(key, link);
+        }
+
+        // trigger record array changes
+        this._recordArrayManager.recordDidChange(record, operation);
+      },
+
+      _lookupRecord: function(type, id) {
+        var typeMap = this.typeMapFor(type),
+            record = typeMap.records[id];
+
+        if (record === undefined) {
+          var model = get(this, 'schema').modelFor(type);
+
+          var data = {
+            store: this
+          };
+          data[get(this, 'idField')] = id;
+
+          record = model._create(data);
+
+          typeMap.records[id] = record;
+        }
+
+        return record;
+      },
+
+      _lookupRecords: function(type, ids) {
+        var _this = this;
+        return ids.map(function(id) {
+          return _this._lookupRecord(type, id);
+        });
+      },
+
+      _lookupFromData: function(type, data) {
+        var idField = get(this, 'idField');
+        if (Ember.isArray(data)) {
+          var ids = data.map(function(recordData) {
+            return recordData[idField];
+          });
+          return this._lookupRecords(type, ids);
+        } else {
+          return this._lookupRecord(type, data[idField]);
+        }
+      },
+
+      _request: function(promise) {
+        var requests = this._requests;
+        requests.add(promise);
+        return promise.finally(function() {
+          requests.remove(promise);
         });
       }
     });
-
 
     return Store;
   });

@@ -8,7 +8,7 @@
 /node_modules
 /vendor/*
 !/vendor/loader.js
-!/vendor/orbit*.js
+!/vendor/*orbit*.js
 
 # misc
 /.sass-cache

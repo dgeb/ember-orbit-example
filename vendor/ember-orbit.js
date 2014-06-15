@@ -955,8 +955,8 @@ define("ember_orbit/source",
         set = Ember.set;
 
     var Source = Ember.Object.extend({
-      sourceClass: null,
-      sourceOptions: null,
+      orbitSourceClass: null,
+      orbitSourceOptions: null,
       schema: null,
 
       /**
@@ -966,9 +966,9 @@ define("ember_orbit/source",
       init: function() {
         this._super.apply(this, arguments);
 
-        var SourceClass = get(this, 'sourceClass');
-        Ember.assert("Source.sourceClass must be initialized with an instance of an `OC.Source`",
-          SourceClass);
+        var OrbitSourceClass = get(this, 'orbitSourceClass');
+        Ember.assert("Source.orbitSourceClass must be initialized with an instance of an `OC.Source`",
+          OrbitSourceClass);
 
         var schema = get(this, 'schema');
         if (!schema) {
@@ -977,9 +977,9 @@ define("ember_orbit/source",
           set(this, 'schema', schema);
         }
 
-        var sourceSchema = get(schema, '_schema');
-        var sourceOptions = get(this, 'sourceOptions');
-        this._source = new SourceClass(sourceSchema, sourceOptions);
+        var orbitSourceSchema = get(schema, '_schema');
+        var orbitSourceOptions = get(this, 'orbitSourceOptions');
+        this.orbitSource = new OrbitSourceClass(orbitSourceSchema, orbitSourceOptions);
       }
     });
 
@@ -1003,7 +1003,7 @@ define("ember_orbit/store",
     }
 
     var Store = Source.extend({
-      sourceClass: OCMemorySource,
+      orbitSourceClass: OCMemorySource,
       schema: null,
       idField: Ember.computed.alias('schema.idField'),
 
@@ -1012,7 +1012,7 @@ define("ember_orbit/store",
 
         this.typeMaps = {};
 
-        this._source.on('didTransform', this._didTransform, this);
+        this.orbitSource.on('didTransform', this._didTransform, this);
 
         this._requests = Ember.OrderedSet.create();
 
@@ -1026,7 +1026,7 @@ define("ember_orbit/store",
       },
 
       willDestroy: function() {
-        this._source.off('didTransform', this.didTransform, this);
+        this.orbitSource.off('didTransform', this.didTransform, this);
         this._recordArrayManager.destroy();
         this._super.apply(this, arguments);
       },
@@ -1047,7 +1047,7 @@ define("ember_orbit/store",
       },
 
       transform: function(operation) {
-        return this._source.transform(operation);
+        return this.orbitSource.transform(operation);
       },
 
       all: function(type) {
@@ -1095,7 +1095,7 @@ define("ember_orbit/store",
         var _this = this;
         this._verifyType(type);
 
-        var promise = this._source.find(type, id).then(function(data) {
+        var promise = this.orbitSource.find(type, id).then(function(data) {
           return _this._lookupFromData(type, data);
         });
 
@@ -1107,7 +1107,7 @@ define("ember_orbit/store",
         this._verifyType(type);
 
         // TODO: normalize properties
-        var promise = this._source.add(type, properties).then(function(data) {
+        var promise = this.orbitSource.add(type, properties).then(function(data) {
           return _this._lookupFromData(type, data);
         });
 
@@ -1117,7 +1117,7 @@ define("ember_orbit/store",
       remove: function(type, id) {
         this._verifyType(type);
 
-        var promise = this._source.remove(type, id);
+        var promise = this.orbitSource.remove(type, id);
 
         return this._request(promise);
       },
@@ -1125,7 +1125,7 @@ define("ember_orbit/store",
       patch: function(type, id, key, value) {
         this._verifyType(type);
 
-        var promise = this._source.patch(type, id, key, value);
+        var promise = this.orbitSource.patch(type, id, key, value);
 
         return this._request(promise);
       },
@@ -1133,7 +1133,7 @@ define("ember_orbit/store",
       addLink: function(type, id, key, relatedId) {
         this._verifyType(type);
 
-        var promise = this._source.addLink(type, id, key, relatedId);
+        var promise = this.orbitSource.addLink(type, id, key, relatedId);
 
         return this._request(promise);
       },
@@ -1141,7 +1141,7 @@ define("ember_orbit/store",
       removeLink: function(type, id, key, relatedId) {
         this._verifyType(type);
 
-        var promise = this._source.removeLink(type, id, key, relatedId);
+        var promise = this.orbitSource.removeLink(type, id, key, relatedId);
 
         return this._request(promise);
       },
@@ -1152,7 +1152,7 @@ define("ember_orbit/store",
 
         var linkType = get(this, 'schema').linkProperties(type, key).model;
 
-        var promise = this._source.findLink(type, id, key).then(function(data) {
+        var promise = this.orbitSource.findLink(type, id, key).then(function(data) {
           return _this._lookupFromData(linkType, data);
         });
 
@@ -1164,7 +1164,7 @@ define("ember_orbit/store",
 
         var ids;
         if (arguments.length === 1) {
-          ids = Object.keys(this._source.retrieve([type]));
+          ids = Object.keys(this.orbitSource.retrieve([type]));
 
         } else if (Ember.isArray(id)) {
           ids = id;
@@ -1178,7 +1178,7 @@ define("ember_orbit/store",
             var idField = get(this, 'idField');
             id = get(id, idField);
           }
-          if (this._source.retrieve([type, id])) {
+          if (this.orbitSource.retrieve([type, id])) {
             return this._lookupRecord(type, id);
           }
         }
@@ -1187,7 +1187,7 @@ define("ember_orbit/store",
       retrieveAttribute: function(type, id, key) {
         this._verifyType(type);
 
-        return this._source.retrieve([type, id, key]);
+        return this.orbitSource.retrieve([type, id, key]);
       },
 
       retrieveLink: function(type, id, key) {
@@ -1195,7 +1195,7 @@ define("ember_orbit/store",
 
         var linkType = get(this, 'schema').linkProperties(type, key).model;
 
-        var relatedId = this._source.retrieve([type, id, '__rel', key]);
+        var relatedId = this.orbitSource.retrieve([type, id, '__rel', key]);
 
         if (linkType && relatedId) {
           return this.retrieve(linkType, relatedId);
@@ -1207,7 +1207,7 @@ define("ember_orbit/store",
 
         var linkType = get(this, 'schema').linkProperties(type, key).model;
 
-        var relatedIds = Object.keys(this._source.retrieve([type, id, '__rel', key]));
+        var relatedIds = Object.keys(this.orbitSource.retrieve([type, id, '__rel', key]));
 
         if (linkType && Ember.isArray(relatedIds) && relatedIds.length > 0) {
           return this.retrieve(linkType, relatedIds);

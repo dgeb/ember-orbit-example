@@ -4,8 +4,8 @@ function createSolarSystem(container, name) {
   return SolarSystem.create({
     store: EO.Store.create({
       container: container,
-      sourceClass: OC.LocalStorageSource,
-      sourceOptions: {
+      orbitSourceClass: OC.LocalStorageSource,
+      orbitSourceOptions: {
         namespace: name
       }
     }),

@@ -13,7 +13,7 @@ export default Ember.Object.extend({
 
     this.set('transformations', []);
 
-    this.get('store._source').on('didTransform', function(operation, inverse) {
+    this.get('store.orbitSource').on('didTransform', function(operation, inverse) {
       console.log(_this.get('name'), 'didTransform', operation, inverse);
 
       if (!_this.get('undoing')) {
@@ -31,8 +31,8 @@ export default Ember.Object.extend({
 
   connectTo: function(connectedSolarSystem) {
     this.set('transformConnectors', [
-      SolarSystemConnector.create({name: 'from', source: this.get('store._source'), target: connectedSolarSystem.get('store._source')}),
-      SolarSystemConnector.create({name: 'to', source: connectedSolarSystem.get('store._source'), target: this.get('store._source')})
+      SolarSystemConnector.create({name: 'from', source: this.get('store.orbitSource'), target: connectedSolarSystem.get('store.orbitSource')}),
+      SolarSystemConnector.create({name: 'to', source: connectedSolarSystem.get('store.orbitSource'), target: this.get('store.orbitSource')})
     ]);
   },
 
@@ -41,7 +41,7 @@ export default Ember.Object.extend({
         _this = this;
 
     this.set('undoing', true);
-    this.get('store._source').transform(transformation.inverse).then(function() {
+    this.get('store.orbitSource').transform(transformation.inverse).then(function() {
       _this.set('undoing', false);
     });
   }

@@ -1,10 +1,11 @@
 import SolarSystem from 'appkit/models/solar_system';
 
-function createSolarSystem(store, name) {
+function createSolarSystem(container, name) {
   return SolarSystem.create({
-    store: store.clone({
-      SourceClass: OC.LocalStorageSource,
-      options: {
+    store: EO.Store.create({
+      container: container,
+      sourceClass: OC.LocalStorageSource,
+      sourceOptions: {
         namespace: name
       }
     }),
@@ -16,8 +17,8 @@ export default Ember.Route.extend({
   model: function() {
     var store = this.get('store');
 
-    var a = createSolarSystem(store, 'A');
-    var b = createSolarSystem(store, 'B');
+    var a = createSolarSystem(store.container, 'A');
+    var b = createSolarSystem(store.container, 'B');
     b.connectTo(a);
 
     return [a, b];

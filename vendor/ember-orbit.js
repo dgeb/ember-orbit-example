@@ -955,7 +955,8 @@ define("ember_orbit/source",
         set = Ember.set;
 
     var Source = Ember.Object.extend({
-      SourceClass: null,
+      sourceClass: null,
+      sourceOptions: null,
       schema: null,
 
       /**
@@ -965,8 +966,8 @@ define("ember_orbit/source",
       init: function() {
         this._super.apply(this, arguments);
 
-        var SourceClass = get(this, 'SourceClass');
-        Ember.assert("Source.SourceClass must be initialized with an instance of an `OC.Source`",
+        var SourceClass = get(this, 'sourceClass');
+        Ember.assert("Source.sourceClass must be initialized with an instance of an `OC.Source`",
           SourceClass);
 
         var schema = get(this, 'schema');
@@ -976,11 +977,10 @@ define("ember_orbit/source",
           set(this, 'schema', schema);
         }
 
-        var oSchema = get(schema, '_schema');
-        var oOptions = get(this, 'options');
-        this._source = new SourceClass(oSchema, oOptions);
+        var sourceSchema = get(schema, '_schema');
+        var sourceOptions = get(this, 'sourceOptions');
+        this._source = new SourceClass(sourceSchema, sourceOptions);
       }
-
     });
 
     return Source;
@@ -1003,8 +1003,7 @@ define("ember_orbit/store",
     }
 
     var Store = Source.extend({
-      SourceClass: OCMemorySource,
-
+      sourceClass: OCMemorySource,
       schema: null,
       idField: Ember.computed.alias('schema.idField'),
 

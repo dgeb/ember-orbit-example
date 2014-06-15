@@ -10,14 +10,6 @@ var App = Ember.Application.extend({
   Resolver: Resolver['default']
 });
 
-EO.Store.reopen({
-  clone: function(settings) {
-    settings = settings || {};
-    settings.container = this.container;
-    return EO.Store.create(settings);
-  }
-});
-
 App.initializer({
   name: 'injectStore',
   initialize: function(container, application) {

@@ -13,8 +13,21 @@ export default Ember.Object.extend({
 
     this.set('transformations', []);
 
-    this.get('store.orbitSource').on('didTransform', function(operation, inverse) {
-      console.log(_this.get('name'), 'didTransform', operation, inverse);
+    var name = this.get('name');
+
+    // Create a store unique to this solar system
+    var store = EO.Store.create({
+      container: this.get('container'),
+      orbitSourceClass: OC.LocalStorageSource,
+      orbitSourceOptions: {
+        namespace: name
+      }
+    });
+    this.set('store', store);
+
+    // Watch for transforms and track them in an array
+    store.orbitSource.on('didTransform', function(operation, inverse) {
+      console.log(name, 'didTransform', operation, inverse);
 
       if (!_this.get('undoing')) {
         _this.get('transformations').pushObject(Transformation.create({

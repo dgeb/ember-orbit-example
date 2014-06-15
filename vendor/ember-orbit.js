@@ -976,7 +976,9 @@ define("ember_orbit/source",
           set(this, 'schema', schema);
         }
 
-        this._source = new SourceClass(get(schema, '_schema'));
+        var oSchema = get(schema, '_schema');
+        var oOptions = get(this, 'options');
+        this._source = new SourceClass(oSchema, oOptions);
       }
 
     });

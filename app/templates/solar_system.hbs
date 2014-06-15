@@ -30,7 +30,7 @@
 
   <ul class="planets">
   {{#each planets}}
-    <li>{{name}} <button {{action 'removePlanet' id}}>X</button></li>
+    <li>{{name}} <button {{action 'removePlanet' this}}>X</button></li>
   {{/each}}
   </ul>
 

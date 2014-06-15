@@ -42,7 +42,6 @@
     <script src="/vendor/ember/ember.prod.js"></script>
     <!-- @endif -->
 
-    <script src="/vendor/ember-data/ember-data.js"></script>
     <script src="/vendor/loader.js"></script>
     <script src="/vendor/ember-resolver/dist/ember-resolver.js"></script>
     <script src="/vendor/ic-ajax/main.js"></script>
@@ -107,10 +106,11 @@
     window.OC = require('orbit_common');
     window.OC.LocalStorageSource = require('orbit_common/local_storage_source');
     window.EO = require('ember_orbit');
-
     Orbit.Promise = Ember.RSVP.Promise;
 
     window.App = require('appkit/app')['default'].create();
+
+
   </script>
   <!-- @endif -->
 

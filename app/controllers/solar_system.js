@@ -5,12 +5,16 @@ export default Em.ObjectController.extend({
 
   actions: {
     addPlanet: function(name) {
-      this.get('model').addPlanet(name);
+      var solarSystem = this.get('model');
+
+      solarSystem.get('store').add('planet', {name: name});
+
+      // clear entry field
       this.set('planetName', null);
     },
 
-    removePlanet: function(id) {
-      this.get('model').removePlanet(id);
+    removePlanet: function(planet) {
+      planet.remove();
     },
 
     undo: function() {

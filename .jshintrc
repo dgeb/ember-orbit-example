@@ -6,10 +6,10 @@
     "setTimeout",
     "Ember",
     "Em",
-    "DS",
     "$",
     "Orbit",
     "OC",
+    "EO",
     "console"
   ],
   "node" : false,

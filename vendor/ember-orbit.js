@@ -24,6 +24,10 @@ define("ember_orbit/attr",
   [],
   function() {
     "use strict";
+    /**
+     @module ember-orbit
+     */
+
     var attr = function(type, options) {
       options = options || {};
       options.type = type;
@@ -57,14 +61,14 @@ define("ember_orbit/links/has_many_array",
   function(RecordArray, LinkProxyMixin) {
     "use strict";
 
+    /**
+     @module ember-orbit
+     */
+
     var get = Ember.get,
         set = Ember.set;
 
     var forEach = Ember.EnumerableUtils.forEach;
-
-    /**
-     @module ember-orbit
-    */
 
     /**
      A `HasManyArray` is a `RecordArray` that represents the contents of a has-many
@@ -73,7 +77,7 @@ define("ember_orbit/links/has_many_array",
      @class HasManyArray
      @namespace EO
      @extends EO.RecordArray
-    */
+     */
     var HasManyArray = RecordArray.extend(LinkProxyMixin, {
 
       arrayContentWillChange: function(index, removed, added) {
@@ -124,7 +128,7 @@ define("ember_orbit/links/has_one_object",
 
     /**
      @module ember-orbit
-    */
+     */
 
     /**
      A `HasOneObject` is an `ObjectProxy` that represents the contents of a has-one
@@ -133,7 +137,7 @@ define("ember_orbit/links/has_one_object",
      @class HasOneObject
      @namespace EO
      @extends Ember.ObjectProxy
-    */
+     */
     var HasOneObject = Ember.ObjectProxy.extend(LinkProxyMixin);
 
 
@@ -143,6 +147,10 @@ define("ember_orbit/links/link_proxy_mixin",
   [],
   function() {
     "use strict";
+    /**
+     @module ember-orbit
+     */
+
     var get = Ember.get,
         set = Ember.set;
 
@@ -172,6 +180,10 @@ define("ember_orbit/main",
   [],
   function() {
     "use strict";
+    /**
+     @module ember-orbit
+     */
+
     var EO = {};
 
     return EO;
@@ -181,12 +193,16 @@ define("ember_orbit/model",
   function(HasOneObject, HasManyArray) {
     "use strict";
 
+    /**
+     @module ember-orbit
+     */
+
     var get = Ember.get;
 
     /**
      @class Model
      @namespace EO
-    */
+     */
     var Model = Ember.Object.extend(Ember.Evented, {
       getAttribute: function(key) {
         var store = get(this, 'store');
@@ -327,10 +343,10 @@ define("ember_orbit/record_array_manager",
   ["ember_orbit/record_arrays/record_array","ember_orbit/record_arrays/filtered_record_array"],
   function(RecordArray, FilteredRecordArray) {
     "use strict";
-    /**
-      @module ember-orbit
-    */
 
+    /**
+     @module ember-orbit
+     */
 
     var get = Ember.get,
         set = Ember.set;
@@ -338,11 +354,11 @@ define("ember_orbit/record_array_manager",
     var forEach = Ember.EnumerableUtils.forEach;
 
     /**
-      @class RecordArrayManager
-      @namespace EO
-      @private
-      @extends Ember.Object
-    */
+     @class RecordArrayManager
+     @namespace EO
+     @private
+     @extends Ember.Object
+     */
     var RecordArrayManager = Ember.Object.extend({
       init: function() {
         this.filteredRecordArrays = Ember.MapWithDefault.create({
@@ -358,15 +374,9 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-       This method is invoked whenever data is changed in the store.
-
-       It updates all record arrays that a record belongs to.
-
-       To avoid thrashing, it only runs at most once per run loop.
-
        @method _processChanges
        @private
-      */
+       */
       _processChanges: function() {
         forEach(this.changes, function(change) {
           this._processChange(change.record, change.operation);
@@ -376,7 +386,7 @@ define("ember_orbit/record_array_manager",
       },
 
       _processChange: function(record, operation) {
-        console.log('_processChange', record, operation);
+    //    console.log('_processChange', record, operation);
 
         var path = operation.path,
             op = operation.op,
@@ -466,14 +476,12 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-       Update an individual filter.
-
        @method updateRecordArray
        @param {EO.RecordArray} array
        @param {Function} filter
        @param {String} type
        @param {EO.Model} record
-      */
+       */
       updateRecordArray: function(array, filter, type, record) {
         var shouldBeInArray;
 
@@ -491,17 +499,11 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-       This method is invoked if the `filterFunction` property is
-       changed on a `EO.FilteredRecordArray`.
-
-       It essentially re-runs the filter from scratch. This same
-       method is invoked when the filter is created in th first place.
-
        @method updateFilter
        @param array
        @param type
        @param filter
-      */
+       */
       updateFilter: function(array, type, filter) {
         var records = this.store.retrieve(type),
             record;
@@ -516,12 +518,10 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-       Create a `EO.RecordArray` for a type and register it for updates.
-
        @method createRecordArray
        @param {String} type
        @return {EO.RecordArray}
-      */
+       */
       createRecordArray: function(type) {
         var array = RecordArray.create({
           type: type,
@@ -535,14 +535,12 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-        Create a `EO.FilteredRecordArray` for a type and register it for updates.
-
-        @method createFilteredRecordArray
-        @param {Class} type
-        @param {Function} filter
-        @param {Object} query (optional)
-        @return {EO.FilteredRecordArray}
-      */
+       @method createFilteredRecordArray
+       @param {Class} type
+       @param {Function} filter
+       @param {Object} query (optional)
+       @return {EO.FilteredRecordArray}
+       */
       createFilteredRecordArray: function(type, filter, query) {
         var array = FilteredRecordArray.create({
           query: query,
@@ -559,16 +557,11 @@ define("ember_orbit/record_array_manager",
       },
 
       /**
-        Register a RecordArray for a given type to be backed by
-        a filter function. This will cause the array to update
-        automatically when records of that type change attribute
-        values or states.
-
-        @method registerFilteredRecordArray
-        @param {EO.RecordArray} array
-        @param {Class} type
-        @param {Function} filter
-      */
+       @method registerFilteredRecordArray
+       @param {EO.RecordArray} array
+       @param {Class} type
+       @param {Function} filter
+       */
       registerFilteredRecordArray: function(array, type, filter) {
         var recordArrays = this.filteredRecordArrays.get(type);
         recordArrays.push(array);
@@ -618,48 +611,22 @@ define("ember_orbit/record_arrays/filtered_record_array",
     "use strict";
 
     /**
-      @module ember-orbit
-    */
+     @module ember-orbit
+     */
 
     var get = Ember.get;
 
     /**
-      Represents a list of records whose membership is determined by the
-      store. As records are created, loaded, or modified, the store
-      evaluates them to determine if they should be part of the record
-      array.
-
-      @class FilteredRecordArray
-      @namespace EO
-      @extends EO.RecordArray
-    */
+     @class FilteredRecordArray
+     @namespace EO
+     @extends EO.RecordArray
+     */
     var FilteredRecordArray = RecordArray.extend({
       /**
-        The filterFunction is a function used to test records from the store to
-        determine if they should be part of the record array.
-
-        Example
-
-        ```javascript
-        var allPeople = store.all('person');
-        allPeople.mapBy('name'); // ["Tom Dale", "Yehuda Katz", "Trek Glowacki"]
-
-        var people = store.filter('person', function(person) {
-          if (person.get('name').match(/Katz$/)) { return true; }
-        });
-        people.mapBy('name'); // ["Yehuda Katz"]
-
-        var notKatzFilter = function(person) {
-          return !person.get('name').match(/Katz$/);
-        };
-        people.set('filterFunction', notKatzFilter);
-        people.mapBy('name'); // ["Tom Dale", "Trek Glowacki"]
-        ```
-
-        @method filterFunction
-        @param {EO.Model} record
-        @return {Boolean} `true` if the record should be in the array
-      */
+       @method filterFunction
+       @param {EO.Model} record
+       @return {Boolean} `true` if the record should be in the array
+       */
       filterFunction: null,
 
       replace: function() {
@@ -668,9 +635,9 @@ define("ember_orbit/record_arrays/filtered_record_array",
       },
 
       /**
-        @method updateFilter
-        @private
-      */
+       @method updateFilter
+       @private
+       */
       _updateFilter: function() {
         var manager = get(this, 'manager');
         manager.updateFilter(this, get(this, 'type'), get(this, 'filterFunction'));
@@ -689,8 +656,8 @@ define("ember_orbit/record_arrays/record_array",
   function() {
     "use strict";
     /**
-      @module ember-orbit
-    */
+     @module ember-orbit
+     */
 
     var get = Ember.get,
         set = Ember.set;
@@ -698,17 +665,11 @@ define("ember_orbit/record_arrays/record_array",
     var forEach = Ember.EnumerableUtils.forEach;
 
     /**
-     A record array is an array that contains records of a certain type. The record
-     array materializes records as needed when they are retrieved for the first
-     time. You should not create record arrays yourself. Instead, an instance of
-     `EO.RecordArray` or its subclasses will be returned by your application's store
-     in response to queries.
-
      @class RecordArray
      @namespace EO
      @extends Ember.ArrayProxy
      @uses Ember.Evented
-    */
+     */
 
     var RecordArray = Ember.ArrayProxy.extend(Ember.Evented, {
       init: function() {
@@ -726,7 +687,7 @@ define("ember_orbit/record_arrays/record_array",
 
        @property type
        @type String
-      */
+       */
       type: null,
 
       /**
@@ -734,7 +695,7 @@ define("ember_orbit/record_arrays/record_array",
 
        @property store
        @type EO.Store
-      */
+       */
       store: null,
 
       /**
@@ -742,7 +703,7 @@ define("ember_orbit/record_arrays/record_array",
 
        @method addObject
        @param {EO.Model} record
-      */
+       */
       addObject: function(record) {
         get(this, 'content').addObject(record);
         this._recordAdded(record);
@@ -753,7 +714,7 @@ define("ember_orbit/record_arrays/record_array",
 
        @method removeObject
        @param {EO.Model} record
-      */
+       */
       removeObject: function(record) {
         get(this, 'content').removeObject(record);
         this._recordRemoved(record);
@@ -792,6 +753,10 @@ define("ember_orbit/relationships/has_many",
   [],
   function() {
     "use strict";
+    /**
+     @module ember-orbit
+     */
+
     var hasMany = function(model, options) {
       options = options || {};
       options.type = 'hasMany';
@@ -814,6 +779,10 @@ define("ember_orbit/relationships/has_one",
   [],
   function() {
     "use strict";
+    /**
+     @module ember-orbit
+     */
+
     var get = Ember.get,
         set = Ember.set;
 
@@ -851,6 +820,10 @@ define("ember_orbit/schema",
   ["orbit_common/schema"],
   function(OrbitSchema) {
     "use strict";
+
+    /**
+     @module ember-orbit
+     */
 
     var get = Ember.get;
 
@@ -951,6 +924,10 @@ define("ember_orbit/source",
   function(Schema, OCSource) {
     "use strict";
 
+    /**
+     @module ember-orbit
+     */
+
     var get = Ember.get,
         set = Ember.set;
 
@@ -989,6 +966,10 @@ define("ember_orbit/store",
   ["ember_orbit/source","ember_orbit/model","ember_orbit/record_array_manager","orbit_common/memory_source"],
   function(Source, Model, RecordArrayManager, OCMemorySource) {
     "use strict";
+
+    /**
+     @module ember-orbit
+     */
 
     var get = Ember.get,
         set = Ember.set;
@@ -1226,7 +1207,7 @@ define("ember_orbit/store",
       },
 
       _didTransform: function(operation, inverse) {
-        console.log('_didTransform', operation, inverse);
+    //    console.log('_didTransform', operation, inverse);
 
         var op = operation.op,
             path = operation.path,

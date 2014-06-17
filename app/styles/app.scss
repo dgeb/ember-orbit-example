@@ -16,7 +16,7 @@ body {
 .app {
   margin: 0 auto;
   text-align: left;
-  width: 960px;
+  width: 900px;
 }
 
 
@@ -60,7 +60,7 @@ h1 {
   }
   .solar-system {
     background-color:rgba(255,255,255,0.2);
-    width: 410px;
+    width: 380px;
     padding: 10px;
     float: left;
 
@@ -94,7 +94,8 @@ h1 {
           background-color:rgba(255,255,255,0.2);
           padding: 2px 5px;
           margin-bottom: 10px;
-          font-size: 12px;
+          font-size: 14px;
+          overflow: hidden;
           .operation {
           }
           .inverse {
